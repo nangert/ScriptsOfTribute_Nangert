@@ -5,6 +5,7 @@ from typing import List
 
 from utils.game_state_to_vector import game_state_to_tensor_dict
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class BetterNetBot(BaseAI):
     def __init__(self, model: torch.nn.Module, bot_name: str = "NNBot"):
@@ -27,18 +28,18 @@ class BetterNetBot(BaseAI):
             raise ValueError("No available patrons to select from.")
 
     def play(self, game_state: GameState, possible_moves: List[BasicMove], remaining_time: int) -> BasicMove:
-        """Choose a move based on the current game state."""
-
-        # instead use your encoding here
         obs = game_state_to_tensor_dict(game_state)
         for k in obs:
-            obs[k] = obs[k].unsqueeze(0)  # add batch dim
+            obs[k] = obs[k].unsqueeze(0).to(device)  # batch dim
 
         with torch.no_grad():
             logits, value = self.model(obs)
-            probs = torch.softmax(logits, dim=1).numpy().flatten()
+            probs = torch.softmax(logits, dim=1).cpu().numpy().flatten()
 
-        idx = int(np.argmax(probs[:len(possible_moves)]))
+        probs = probs[:len(possible_moves)]
+        probs /= probs.sum()  # re-normalize just in case
+        idx = int(np.random.choice(len(probs), p=probs))
+
         self.move_history.append({
             "game_state": game_state,
             "chosen_move_idx": idx
