@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import wandb
 
 from scripts_of_tribute.game import Game
 
@@ -12,7 +13,7 @@ from RandomBot.RandomBot import RandomBot
 from utils.game_state_to_vector import game_state_to_tensor_dict
 
 
-def train_one_game(model, optimizer):
+def train_one_game(model, optimizer, wandb_run, episode):
     bot1 = BetterNetBot(model, bot_name="BetterNet")
     bot2 = RandomBot(bot_name="RandomBot")
 
@@ -39,25 +40,59 @@ def train_one_game(model, optimizer):
     states = []
     actions = []
     for rec in bot1.move_history:
-        vec = game_state_to_tensor_dict(rec["game_state"])
-        states.append(vec)
+        states.append(game_state_to_tensor_dict(rec["game_state"]))
         actions.append(rec["chosen_move_idx"])
 
-    states_tensor = torch.tensor(np.vstack(states), dtype=torch.float32)
+    # Process states
+    for k in states[0].keys():
+        states_tensor = torch.stack([s[k] for s in states], dim=0)
+
     actions_tensor = torch.tensor(actions, dtype=torch.long)
     rewards_tensor = torch.tensor([reward] * len(actions), dtype=torch.float32)
 
     optimizer.zero_grad()
-    outputs = model(states_tensor)
-    losses = F.cross_entropy(outputs, actions_tensor, reduction='none')
-    loss = (losses * rewards_tensor).mean()
-    loss.backward()
+    outputs, values = model(states_tensor)
+
+    policy_losses = F.cross_entropy(outputs, actions_tensor, reduction='none')
+    policy_loss = (policy_losses * rewards_tensor).mean()
+
+    value_loss = F.mse_loss(values, rewards_tensor)
+    total_loss = policy_loss + 0.5 * value_loss  # value loss weighted lower
+
+    total_loss.backward()
     optimizer.step()
+
+    # Logging extra stuff
+    probs = torch.softmax(outputs, dim=1)
+    entropy = -(probs * probs.log()).sum(dim=1).mean()
+
+    wandb_run.log({
+        "episode": episode,
+        "policy_loss": policy_loss.item(),
+        "value_loss": value_loss.item(),
+        "total_loss": total_loss.item(),
+        "reward": reward,
+        "action_entropy": entropy.item(),
+        "moves_taken": len(actions),
+    })
 
     return reward
 
+
 def main():
     freeze_support()
+
+    wandb_run = wandb.init(
+        entity="angert-niklas",
+        project="ScriptsOfTribute",
+        config={
+            "input_size": 82,  # or dynamic calculation
+            "output_size": 10,
+            "hidden_dim": 64,
+            "lr": 1e-3,
+            "model_type": "BetterNet"
+        }
+    )
 
     input_size = 98
     output_size = 10
@@ -65,18 +100,16 @@ def main():
     model = BetterNet(input_size, output_size)
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    num_games = 5
+    num_games = 20
     wins = 0
     for episode in range(num_games):
-        r = train_one_game(model, optimizer)
+        r = train_one_game(model, optimizer, wandb_run, episode)
         if r == 1:
             wins += 1
         if episode % 10 == 0:
             print(f"Episode {episode}: win rate = {wins / (episode + 1):.2f}")
 
     print(f"Final win rate: {wins / num_games:.2f}")
-
-    r = train_one_game(model, optimizer)
 
 if __name__ == "__main__":
     main()
