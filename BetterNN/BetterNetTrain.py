@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train_one_game(model, optimizer, wandb_run, episode):
     bot1 = BetterNetBot(model, bot_name="BetterNet")
-    bot2 = RandomBot(bot_name="RandomBot")
+    bot2 = RandomBot(bot_name="RandomBot2")
 
     game = Game()
     game.register_bot(bot1)
@@ -29,7 +29,6 @@ def train_one_game(model, optimizer, wandb_run, episode):
         start_game_runner=True,
         runs=1,
         threads=1,
-        timeout=30
     )
 
     if bot1.winner is None:
@@ -47,10 +46,13 @@ def train_one_game(model, optimizer, wandb_run, episode):
 
     # Process states
     for k in states[0].keys():
-        states_tensor = torch.stack([s[k] for s in states], dim=0).to(device)
+        states_tensor = torch.stack([s[k] for s in states], dim=0)
+        # states_tensor = torch.stack([s[k] for s in states], dim=0).to(device)
 
-    actions_tensor = torch.tensor(actions, dtype=torch.long).to(device)
-    rewards_tensor = torch.tensor([reward] * len(actions), dtype=torch.float32).to(device)
+    actions_tensor = torch.tensor(actions, dtype=torch.long)
+    # actions_tensor = torch.tensor(actions, dtype=torch.long).to(device)
+    rewards_tensor = torch.tensor([reward] * len(actions), dtype=torch.float32)
+    # rewards_tensor = torch.tensor([reward] * len(actions), dtype=torch.float32).to(device)
 
     optimizer.zero_grad()
     outputs, values = model(states_tensor)
@@ -68,23 +70,26 @@ def train_one_game(model, optimizer, wandb_run, episode):
     probs = torch.softmax(outputs, dim=1)
     entropy = -(probs * probs.log()).sum(dim=1).mean()
 
-    wandb_run.log({
-        "episode": episode,
+    log = {
         "policy_loss": policy_loss.item(),
         "value_loss": value_loss.item(),
         "total_loss": total_loss.item(),
         "reward": reward,
         "action_entropy": entropy.item(),
         "moves_taken": len(actions),
-    })
+    }
+
+    print('LOGS')
+    print(log)
+    print(episode)
+
+    wandb_run.log(log, step=episode)
 
     return reward
 
 
 def main():
     freeze_support()
-
-    print("Using device:", device)
 
     wandb_run = wandb.init(
         entity="angert-niklas",
@@ -98,13 +103,16 @@ def main():
         }
     )
 
+    print("Using device:", device)
+
     input_size = 98
     output_size = 10
 
     model_save_path = "saved_models/better_net_latest.pt"
     os.makedirs("saved_models", exist_ok=True)
 
-    model = BetterNet(input_size, output_size).to(device)
+    model = BetterNet(input_size, output_size)
+    # model = BetterNet(input_size, output_size).to(device)
 
     if os.path.exists(model_save_path):
         print(f"Loading model from {model_save_path}")
@@ -114,7 +122,7 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    num_games = 20
+    num_games = 1
     wins = 0
     for episode in range(num_games):
         r = train_one_game(model, optimizer, wandb_run, episode)
@@ -127,6 +135,8 @@ def main():
 
     torch.save(model.state_dict(), model_save_path)
     print(f"Model saved to {model_save_path}")
+
+    wandb.finish()
 
 
 if __name__ == "__main__":
