@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from pathlib import Path
-from BetterNN.BetterNet import BetterNet
+from BetterNN_v2.BetterNet_v2 import BetterNetV2
 from ReplayBuffer import ReplayBuffer
 import wandb
 
@@ -17,7 +17,7 @@ class Trainer:
         self.save_path = save_path
         self.wandb_run = wandb_run
 
-        self.model = BetterNet(hidden_dim=10, num_moves=98).to(device)
+        self.model = BetterNetV2(hidden_dim=10, num_moves=98).to(device)
         if self.model_path.exists():
             self.model.load_state_dict(torch.load(self.model_path, map_location=device))
             print(f"[Trainer] Loaded model from {self.model_path}")
@@ -29,7 +29,7 @@ class Trainer:
         self.buffer = ReplayBuffer(self.buffer_path)
 
     def train(self, epochs: int = 5, batch_size: int = 32):
-        obs_all, actions_all, rewards_all = self.buffer.get_all()
+        obs_all, actions_all, rewards_all, move_tensor_all = self.buffer.get_all()
         dataset_size = len(actions_all)
 
         for epoch in range(epochs):
@@ -43,7 +43,8 @@ class Trainer:
 
                 self.optimizer.zero_grad()
 
-                logits, values = self.model(obs)
+                move_tensor = move_tensor_all[indices].to(device)
+                logits, values = self.model(obs, move_tensor)
 
                 policy_loss = F.cross_entropy(logits, actions, reduction='none')
                 policy_loss = (policy_loss * rewards).mean()

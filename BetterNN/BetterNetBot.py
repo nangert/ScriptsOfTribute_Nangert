@@ -3,8 +3,10 @@ import torch
 import numpy as np
 from typing import List
 from utils.game_state_to_vector import game_state_to_tensor_dict
+from utils.move_to_tensor import move_to_tensor
 from pathlib import Path
 import pickle
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -32,21 +34,37 @@ class BetterNetBot(BaseAI):
     def play(self, game_state: GameState, possible_moves: List[BasicMove], remaining_time: int) -> BasicMove:
         obs = game_state_to_tensor_dict(game_state)
         for k in obs:
-            obs[k] = obs[k].unsqueeze(0).to(next(self.model.parameters()).device)
+            obs[k] = obs[k].unsqueeze(0).to(device)  # [1, ...]
+
+        # Encode all possible moves
+        move_tensors = [move_to_tensor(m, game_state) for m in possible_moves]  # list of [D]
+        max_moves = 10
+        move_dim = move_tensors[0].shape[0]
+
+        # Pad or truncate to [max_moves, D]
+        if len(move_tensors) >= max_moves:
+            padded_moves = move_tensors[:max_moves]
+        else:
+            pad_len = max_moves - len(move_tensors)
+            padding = [torch.zeros(move_dim) for _ in range(pad_len)]
+            padded_moves = move_tensors + padding
+
+        move_tensor = torch.stack(padded_moves, dim=0).unsqueeze(0).to(device)  # [1, N_max, D]
 
         with torch.no_grad():
-            logits, value = self.model(obs)
+            logits, _ = self.model(obs, move_tensor)  # [1, N_max]
             probs = torch.softmax(logits, dim=1).cpu().numpy().flatten()
 
+        # Only sample among valid moves
         probs = probs[:len(possible_moves)]
         probs /= probs.sum()
         idx = int(np.random.choice(len(probs), p=probs))
 
-        # Save trajectory with reward placeholder (will update later)
         self.trajectory.append({
-            "state": game_state_to_tensor_dict(game_state),  # save CPU version
+            "state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
+            "move_tensor": move_tensor.squeeze(0).cpu(),  # [N_max, D]
             "action_idx": idx,
-            "reward": None  # placeholder
+            "reward": None
         })
 
         self.move_history.append({

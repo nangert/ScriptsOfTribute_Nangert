@@ -23,6 +23,7 @@ class ReplayBuffer:
         """Convert all data into batched tensors (for full-batch training)."""
         # Keys: player_stats, patron_tensor, tavern_tensor
         obs = {"player_stats": [], "patron_tensor": [], "tavern_tensor": []}
+        move_tensors = []
         actions = []
         rewards = []
 
@@ -31,6 +32,7 @@ class ReplayBuffer:
             obs["player_stats"].append(state["player_stats"])
             obs["patron_tensor"].append(state["patron_tensor"])
             obs["tavern_tensor"].append(state["tavern_tensor"])
+            move_tensors.append(entry["move_tensor"])
             actions.append(entry["action_idx"])
             rewards.append(entry["reward"])
 
@@ -38,7 +40,8 @@ class ReplayBuffer:
         obs = {
             k: torch.stack(v, dim=0) for k, v in obs.items()
         }
+        move_tensor = torch.stack(move_tensors, dim=0)
         actions = torch.tensor(actions, dtype=torch.long)
         rewards = torch.tensor(rewards, dtype=torch.float32)
 
-        return obs, actions, rewards
+        return obs, actions, rewards, move_tensor

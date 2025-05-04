@@ -9,12 +9,12 @@ import wandb
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main():
-    model_path = Path("saved_models/better_net_latest.pt")
-    save_model_path = Path("saved_models/better_net_latest.pt")
+    model_path = Path("saved_models/better_net_v2.pt")
+    save_model_path = Path("saved_models/better_net_v2.pt")
     buffer_path = Path("saved_buffers/BetterNet_buffer.pkl")
 
-    games_per_cycle = 5
-    num_cycles = 2
+    games_per_cycle = 1
+    num_cycles = 1
     train_epochs_per_cycle = 5
     batch_size = 32
 
