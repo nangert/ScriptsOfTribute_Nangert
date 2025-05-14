@@ -5,23 +5,27 @@ from pathlib import Path
 from RolloutWorker import RolloutWorker
 from Trainer import Trainer
 import wandb
+import uuid
+
+from utils.merge_replay_buffers import merge_replay_buffers
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main():
     model_path = Path("saved_models/better_net_v2.pt")
     save_model_path = Path("saved_models/better_net_v2.pt")
-    buffer_path = Path("saved_buffers/BetterNet_buffer.pkl")
+    game_buffers = Path("game_buffers")
+    merged_buffer_path = Path("saved_buffers/BetterNet_buffer.pkl")
 
-    games_per_cycle = 1
-    num_cycles = 1
+    games_per_cycle = 5
+    num_cycles = 5
     train_epochs_per_cycle = 5
     batch_size = 32
 
     # ✅ Initialize WandB run
     wandb_run = wandb.init(
         project="ScriptsOfTribute",
-        entity="angert-niklas",  # <-- your WandB account
+        entity="angert-niklas",
         config={
             "games_per_cycle": games_per_cycle,
             "train_epochs_per_cycle": train_epochs_per_cycle,
@@ -42,10 +46,12 @@ def main():
         )
         worker.run()
 
+        merge_replay_buffers(game_buffers, merged_buffer_path)
+
         # 2. Train model on new experiences
         trainer = Trainer(
             model_path=model_path,
-            buffer_path=buffer_path,
+            buffer_path=merged_buffer_path,
             save_path=save_model_path,
             wandb_run=wandb_run  # <-- pass the wandb_run
         )

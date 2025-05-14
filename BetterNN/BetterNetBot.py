@@ -6,6 +6,7 @@ from utils.game_state_to_vector import game_state_to_tensor_dict
 from utils.move_to_tensor import move_to_tensor
 from pathlib import Path
 import pickle
+import uuid
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -19,7 +20,6 @@ class BetterNetBot(BaseAI):
         self.move_history = []
         self.trajectory = []  # NEW: stores (state_tensor_dict, action_idx, reward_placeholder)
         self.winner = None
-        self.buffer_save_path = Path(f"saved_buffers/{self.bot_name}_buffer.pkl")
 
     def pregame_prepare(self):
         """Optional: Prepare your bot before the game starts."""
@@ -100,10 +100,11 @@ class BetterNetBot(BaseAI):
         self.save_trajectory()
 
     def save_trajectory(self):
-        self.buffer_save_path.parent.mkdir(parents=True, exist_ok=True)
+        buffer_save_path = Path(f"game_buffers/{self.bot_name}_buffer_{uuid.uuid4().hex}.pkl")
+        buffer_save_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            if self.buffer_save_path.exists():
-                with open(self.buffer_save_path, "rb") as f:
+            if buffer_save_path.exists():
+                with open(buffer_save_path, "rb") as f:
                     existing_data = pickle.load(f)
             else:
                 existing_data = []
@@ -113,7 +114,7 @@ class BetterNetBot(BaseAI):
 
         existing_data.extend(self.trajectory)
 
-        with open(self.buffer_save_path, "wb") as f:
+        with open(buffer_save_path, "wb") as f:
             pickle.dump(existing_data, f)
 
-        print(f"Saved {len(self.trajectory)} steps to {self.buffer_save_path}")
+        print(f"Saved {len(self.trajectory)} steps to {buffer_save_path}")

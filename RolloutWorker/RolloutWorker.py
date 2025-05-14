@@ -37,9 +37,10 @@ class RolloutWorker:
                 bot1.bot_name,
                 bot2.bot_name,
                 start_game_runner=True,
-                runs=1,
-                threads=1,
-                timeout=30
+                runs=32,
+                threads=8,
+                timeout=20,
+                enable_logs="BOTH",
             )
 
 if __name__ == "__main__":
