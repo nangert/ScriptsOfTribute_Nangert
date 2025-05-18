@@ -1,29 +1,75 @@
 ﻿import logging
-import multiprocessing as mp
+import random
+import time
+from datetime import datetime
 from pathlib import Path
 
 from RolloutWorker_v2.RolloutWorker import RolloutWorker
-from utils.model_versioning import get_model_version_path
+from utils.model_versioning import get_latest_model_path, get_model_version_path
+
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "data_generation.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(name)s %(levelname)s: %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("DataGeneration")
+
+MODEL_DIR = Path("saved_models")
+MODEL_PREFIX = "better_net_v"
+GAMES_PER_CYCLE = 64
+SLEEP_BETWEEN_CYCLES = 10  # seconds
+
+
+def select_opponent_model() -> Path | None:
+    # Try to get the last 3 versions if they exist
+    candidates = [
+        get_model_version_path(MODEL_DIR, MODEL_PREFIX, offset=i)
+        for i in range(1, 4)
+    ]
+    candidates = [c for c in candidates if c is not None]
+
+    if not candidates:
+        return None
+
+    return random.choice(candidates)
+
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="[%(name)s] %(message)s")
-    MODEL_DIR = Path("saved_models/")
+    while True:
+        try:
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            opponent_model_path = select_opponent_model()
 
-    # Get the latest model for training
-    model_path = get_model_version_path(MODEL_DIR)
-    # Get the opponent model, lagging by one version
-    opponent_path = get_model_version_path(MODEL_DIR, offset=1)
+            logger.info(f"Primary Model: {primary_model_path}")
+            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
-    games_per_cycle = 64
+            worker = RolloutWorker(
+                model_path=primary_model_path,
+                opponent_path=opponent_model_path,
+                num_games=GAMES_PER_CYCLE
+            )
+            worker.run()
 
-    worker = RolloutWorker(
-        model_path=model_path,
-        opponent_path=opponent_path,
-        num_games=games_per_cycle
-    )
-    worker.run()
+            # Write generation summary log
+            with open(LOG_DIR / "generation_summary.log", "a") as f:
+                f.write(f"{datetime.now()}: Played {GAMES_PER_CYCLE} games. "
+                        f"Primary: {primary_model_path.name}, "
+                        f"Opponent: {opponent_model_path.name if opponent_model_path else 'RandomBot'}\n")
+
+            logger.info(f"Finished {GAMES_PER_CYCLE} games. Sleeping for {SLEEP_BETWEEN_CYCLES}s...\n")
+            time.sleep(SLEEP_BETWEEN_CYCLES)
+
+        except Exception as e:
+            logger.exception(f"Error during data generation: {e}")
+            time.sleep(SLEEP_BETWEEN_CYCLES)
+
 
 if __name__ == "__main__":
-    mp.freeze_support()
-    mp.set_start_method("spawn", force=True)
     main()

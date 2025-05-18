@@ -1,44 +1,41 @@
-﻿import logging
-from multiprocessing import freeze_support, set_start_method
+﻿from multiprocessing import freeze_support, set_start_method
+
+import logging
+import time
 from pathlib import Path
 
 import torch
 import wandb
 
 from RolloutWorker_v2.Trainer import Trainer
-from utils.model_versioning import get_latest_model_path
 from utils.merge_replay_buffers import merge_replay_buffers
+from utils.model_versioning import get_latest_model_path
 
-# Device configuration
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# File paths
-MODEL_DIR = Path("saved_models/")
-MODEL_PATH = get_latest_model_path(MODEL_DIR)
-SAVE_MODEL_PATH = MODEL_PATH
+MODEL_DIR = Path("saved_models")
+MODEL_PREFIX = "better_net_v"
+SAVE_MODEL_PATH = MODEL_DIR
+
 GAME_BUFFERS_DIR = Path("game_buffers")
 MERGED_BUFFER_PATH = Path("saved_buffers/BetterNet_buffer.pkl")
+USED_BUFFER_DIR = Path("used_buffers")
 
-# Training hyperparameters
 GAMES_PER_CYCLE = 64
-NUM_CYCLES = 1
-EPOCHS_PER_CYCLE = 10
+EPOCHS_PER_CYCLE = 5
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-5
+SLEEP_IF_NO_DATA = 300
 
 
-def main() -> None:
-    """
-    Runs several cycles of merging replay buffers and training the model.
-    """
+def main():
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] %(name)s %(levelname)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
-    logger = logging.getLogger("train_full_cycle")
+    logger = logging.getLogger("TrainerLoop")
 
-    # Initialize Weights & Biases
     wandb_run = wandb.init(
         project="ScriptsOfTribute",
         entity="angert-niklas",
@@ -49,20 +46,36 @@ def main() -> None:
             "learning_rate": LEARNING_RATE,
             "model": "BetterNetV2",
         },
-        name="training_run"
+        name="continuous_training_run"
     )
 
     try:
-        for cycle in range(1, NUM_CYCLES + 1):
-            logger.info("=== Starting Cycle %d/%d ===", cycle, NUM_CYCLES)
+        while True:
+            # Check if there are at least GAMES_PER_CYCLE new game buffers
+            available_buffers = list(GAME_BUFFERS_DIR.glob("*.pkl"))
 
-            # Merge replay buffers into a single buffer file
+            if len(available_buffers) < GAMES_PER_CYCLE:
+                logger.info(
+                    "Not enough new data to train (%d found, %d required). Sleeping for %d seconds...",
+                    len(available_buffers), GAMES_PER_CYCLE, SLEEP_IF_NO_DATA
+                )
+                time.sleep(SLEEP_IF_NO_DATA)
+                continue
+
+            logger.info("Merging %d new replay buffers...", len(available_buffers))
             merge_replay_buffers(GAME_BUFFERS_DIR, MERGED_BUFFER_PATH)
-            logger.info("Merged buffers into %s", MERGED_BUFFER_PATH)
 
-            # Train on merged buffer
+            if not MERGED_BUFFER_PATH.exists() or MERGED_BUFFER_PATH.stat().st_size == 0:
+                logger.warning("Merged buffer is empty after merging. Sleeping...")
+                time.sleep(SLEEP_IF_NO_DATA)
+                continue
+
+            # Load latest or create new model
+            model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            logger.info("Starting training with model: %s", model_path)
+
             trainer = Trainer(
-                model_path=MODEL_PATH,
+                model_path=model_path,
                 buffer_path=MERGED_BUFFER_PATH,
                 save_path=SAVE_MODEL_PATH,
                 wandb_run=wandb_run,
@@ -73,12 +86,11 @@ def main() -> None:
                 batch_size=BATCH_SIZE
             )
 
-            logger.info("=== Finished Cycle %d/%d ===", cycle, NUM_CYCLES)
-    finally:
-        # Ensure W&B run is closed
-        wandb_run.finish()
-        logger.info("W&B run finished")
+            logger.info("Training complete. Waiting for more data...")
 
+    finally:
+        wandb_run.finish()
+        logger.info("W&B run finished.")
 
 if __name__ == "__main__":
     freeze_support()

@@ -111,11 +111,24 @@ class Trainer:
         Saves the model with a new version number to avoid overwriting.
         """
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
+        model_dir = self.save_path
+        model_prefix = "better_net_v"
+        extension = ".pt"
 
-        # Determine next version number
-        current_version = int(self.save_path.stem.split("_v")[-1]) if "_v" in self.save_path.stem else 1
+        # Find all existing model files
+        existing_models = list(model_dir.glob(f"{model_prefix}*{extension}"))
+        if existing_models:
+            versions = [
+                int(f.stem.replace(model_prefix, ""))
+                for f in existing_models
+                if f.stem.replace(model_prefix, "").isdigit()
+            ]
+            current_version = max(versions)
+        else:
+            current_version = 0
+
         next_version = current_version + 1
-        new_save_path = self.save_path.parent / f"better_net_v{next_version}.pt"
+        new_save_path = model_dir / f"{model_prefix}{next_version}{extension}"
 
         torch.save(self.model.state_dict(), new_save_path)
         self.logger.info("Model saved to %s", new_save_path)
