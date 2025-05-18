@@ -5,8 +5,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 from pathlib import Path
 from BetterNN_v2.BetterNet_v2 import BetterNetV2
-from ReplayBuffer import ReplayBuffer
 import wandb
+
+from utils.ReplayBuffer import ReplayBuffer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

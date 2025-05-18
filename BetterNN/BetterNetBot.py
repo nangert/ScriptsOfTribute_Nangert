@@ -1,120 +1,105 @@
-﻿from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
-import torch
-import numpy as np
-from typing import List
-from utils.game_state_to_vector import game_state_to_tensor_dict
-from utils.move_to_tensor import move_to_tensor
-from pathlib import Path
-import pickle
+﻿import pickle
 import uuid
 
+import numpy as np
+import torch
+from pathlib import Path
+from typing import List, Optional
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
+from scripts_of_tribute.board import EndGameState
+from utils.game_state_to_vector import game_state_to_tensor_dict
+from utils.move_to_tensor import move_to_tensor, MOVE_FEAT_DIM
+
 
 class BetterNetBot(BaseAI):
-    def __init__(self, model: torch.nn.Module, bot_name: str = "BetterNet"):
+    """
+    Bot that uses a neural network policy to select moves.
+    """
+
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        bot_name: str = "BetterNet",
+    ):
         super().__init__(bot_name=bot_name)
         self.model = model
         self.model.eval()
 
-        self.move_history = []
-        self.trajectory = []  # NEW: stores (state_tensor_dict, action_idx, reward_placeholder)
+        self.move_history: List[dict] = []
+        self.trajectory: List[dict] = []
+        self.winner: Optional[str] = None
+
+    def pregame_prepare(self) -> None:
+        """Reset history and trajectory before each game."""
+        self.move_history.clear()
+        self.trajectory.clear()
         self.winner = None
 
-    def pregame_prepare(self):
-        """Optional: Prepare your bot before the game starts."""
-        pass
-
     def select_patron(self, available_patrons: List[PatronId]) -> PatronId:
-        if available_patrons:
-            return available_patrons[0]
-        else:
+        if not available_patrons:
             raise ValueError("No available patrons to select from.")
+        return available_patrons[0]
 
-    def play(self, game_state: GameState, possible_moves: List[BasicMove], remaining_time: int) -> BasicMove:
+    def play(
+        self,
+        game_state: GameState,
+        possible_moves: List[BasicMove],
+        remaining_time: int,
+    ) -> BasicMove:
+        # Convert state to tensors
         obs = game_state_to_tensor_dict(game_state)
-        for k in obs:
-            obs[k] = obs[k].unsqueeze(0).to(device)  # [1, ...]
+        obs = {k: v.unsqueeze(0) for k, v in obs.items()}
 
-        # Encode all possible moves
-        move_tensors = [move_to_tensor(m, game_state) for m in possible_moves]  # list of [D]
+        # Encode moves and pad/truncate to fixed max
+        move_tensors = [move_to_tensor(m, game_state) for m in possible_moves]
         max_moves = 10
-        move_dim = move_tensors[0].shape[0]
-
-        # Pad or truncate to [max_moves, D]
+        move_dim = MOVE_FEAT_DIM
         if len(move_tensors) >= max_moves:
-            padded_moves = move_tensors[:max_moves]
+            batch = move_tensors[:max_moves]
         else:
-            pad_len = max_moves - len(move_tensors)
-            padding = [torch.zeros(move_dim) for _ in range(pad_len)]
-            padded_moves = move_tensors + padding
+            padding = [torch.zeros(move_dim) for _ in range(max_moves - len(move_tensors))]
+            batch = move_tensors + padding
+        move_batch = torch.stack(batch, dim=0).unsqueeze(0)
 
-        move_tensor = torch.stack(padded_moves, dim=0).unsqueeze(0).to(device)  # [1, N_max, D]
-
+        # Compute action probabilities
         with torch.no_grad():
-            logits, _ = self.model(obs, move_tensor)  # [1, N_max]
-            probs = torch.softmax(logits, dim=1).cpu().numpy().flatten()
+            logits, _ = self.model(obs, move_batch)
+            probs = torch.softmax(logits, dim=-1).cpu().numpy().flatten()
+        probs = probs[: len(possible_moves)]
+        total = probs.sum()
+        if total > 0:
+            probs /= total
+            idx = int(np.random.choice(len(probs), p=probs))
+        else:
+            idx = 0
 
-        # Only sample among valid moves
-        probs = probs[:len(possible_moves)]
-        probs /= probs.sum()
-        idx = int(np.random.choice(len(probs), p=probs))
-
+        # Record for training
         self.trajectory.append({
             "state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
-            "move_tensor": move_tensor.squeeze(0).cpu(),  # [N_max, D]
+            "move_tensor": move_batch.squeeze(0).cpu(),
             "action_idx": idx,
-            "reward": None
+            "reward": None,
         })
-
-        self.move_history.append({
-            "game_state": game_state,
-            "chosen_move_idx": idx
-        })
+        self.move_history.append({"game_state": game_state, "chosen_move_idx": idx})
 
         return possible_moves[idx]
 
-    def game_end(self, final_state):
-        self.winner = final_state.state.winner
-        print(f"[game_end] Winner: {self.winner}")
+    def game_end(self, end_game_state: EndGameState, final_state: GameState) -> None:
+        # Assign rewards
+        winner = end_game_state.winner
+        reward = 1 if winner == 'PLAYER1' else -1
+        if winner not in ('PLAYER1', 'PLAYER2'):
+            reward = -1
 
-        # Assign final reward
-        try:
-            with open(f"{self.bot_name}_result.txt", "r") as f:
-                line = f.read()
-                if "PLAYER1" in line:
-                    game_reward = 1.0
-                elif "PLAYER2" in line:
-                    game_reward = -1.0
-                else:
-                    game_reward = 0.0
-        except FileNotFoundError:
-            print("No result file found. Assuming reward=0.")
-            game_reward = 0.0
-
-        # Retroactively assign reward to all saved steps
         for step in self.trajectory:
-            step["reward"] = game_reward
-
-        # Save this trajectory to disk
+            step["reward"] = reward
         self.save_trajectory()
 
-    def save_trajectory(self):
-        buffer_save_path = Path(f"game_buffers/{self.bot_name}_buffer_{uuid.uuid4().hex}.pkl")
-        buffer_save_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            if buffer_save_path.exists():
-                with open(buffer_save_path, "rb") as f:
-                    existing_data = pickle.load(f)
-            else:
-                existing_data = []
-        except Exception as e:
-            print(f"Error loading existing buffer: {e}")
-            existing_data = []
-
-        existing_data.extend(self.trajectory)
-
-        with open(buffer_save_path, "wb") as f:
-            pickle.dump(existing_data, f)
-
-        print(f"Saved {len(self.trajectory)} steps to {buffer_save_path}")
+    def save_trajectory(self) -> None:
+        buffer_dir = Path("game_buffers")
+        buffer_dir.mkdir(parents=True, exist_ok=True)
+        filename = buffer_dir / f"{self.bot_name}_buffer_{uuid.uuid4().hex}.pkl"
+        with open(filename, "wb") as f:
+            pickle.dump(self.trajectory, f)
+            f.flush()

@@ -9,7 +9,7 @@ class BetterNet(nn.Module):
 
         # Input dimensions based on obs structure
         self.player_input_dim = 14
-        self.patron_input_dim = 9 * 2  # 9 patrons × 2 flags
+        self.patron_input_dim = 10 * 2  # 9 patrons × 2 flags
         self.card_input_dim = 11       # per card features
 
         # Player stats encoder

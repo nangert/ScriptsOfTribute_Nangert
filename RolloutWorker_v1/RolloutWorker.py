@@ -24,24 +24,24 @@ class RolloutWorker:
         self.model.eval()
 
     def run(self):
-        for i in range(self.num_games):
-            print(f"[RolloutWorker] Starting game {i + 1}/{self.num_games}")
-            bot1 = BetterNetBot(self.model, bot_name="BetterNet")
-            bot2 = RandomBot(bot_name="RandomBot2")
+        print(f"[RolloutWorker] Starting {self.num_games} games")
+        bot1 = BetterNetBot(self.model, bot_name="BetterNet")
+        bot2 = RandomBot(bot_name="RandomBot2")
 
-            game = Game()
-            game.register_bot(bot1)
-            game.register_bot(bot2)
+        game = Game()
+        game.register_bot(bot1)
+        game.register_bot(bot2)
 
-            game.run(
-                bot1.bot_name,
-                bot2.bot_name,
-                start_game_runner=True,
-                runs=32,
-                threads=8,
-                timeout=20,
-                enable_logs="BOTH",
-            )
+        game.run(
+            bot1.bot_name,
+            bot2.bot_name,
+            start_game_runner=True,
+            runs=self.num_games,
+            threads=8,
+            timeout=20
+        )
+
+        print(f"[RolloutWorker] Finished {self.num_games} games")
 
 if __name__ == "__main__":
     worker = RolloutWorker(

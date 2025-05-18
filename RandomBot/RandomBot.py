@@ -24,6 +24,6 @@ class RandomBot(BaseAI):
         else:
             raise ValueError("No possible moves available.")
 
-    def game_end(self, final_state):
+    def game_end(self, game_state, final_state):
         """Optional: Handle end-of-game logic."""
         pass

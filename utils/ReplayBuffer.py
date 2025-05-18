@@ -4,10 +4,12 @@ import pickle
 from pathlib import Path
 import torch
 from typing import List
+import shutil
 
 class ReplayBuffer:
-    def __init__(self, buffer_path: Path):
+    def __init__(self, buffer_path: Path, archive_dir: Path = Path("used_buffers")):
         self.buffer_path = buffer_path
+        self.archive_dir = archive_dir
         self.data = self._load()
 
     def _load(self) -> List[dict]:
@@ -45,3 +47,10 @@ class ReplayBuffer:
         rewards = torch.tensor(rewards, dtype=torch.float32)
 
         return obs, actions, rewards, move_tensor
+
+    def archive_buffer(self):
+        """Move buffer file to the archive directory after training."""
+        self.archive_dir.mkdir(parents=True, exist_ok=True)
+        target_path = self.archive_dir / self.buffer_path.name
+        shutil.move(str(self.buffer_path), str(target_path))
+        print(f"[ReplayBuffer] Archived buffer to {target_path}")
