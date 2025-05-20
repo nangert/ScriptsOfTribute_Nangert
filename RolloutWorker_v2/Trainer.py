@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import wandb
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from BetterNN_v2.BetterNet_v2 import BetterNetV2
 from utils.ReplayBuffer import ReplayBuffer
@@ -26,6 +27,7 @@ class Trainer:
         save_path: Path,
         wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
         lr: float = 1e-4,
+        epochs = 5
     ) -> None:
         # Logger
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -34,9 +36,10 @@ class Trainer:
         self.buffer_path = buffer_path
         self.save_path = save_path
         self.wandb_run = wandb_run
+        self.epochs = epochs
 
         # Initialize model
-        self.model = BetterNetV2(hidden_dim=10, num_moves=98).to(device)
+        self.model = BetterNetV2(hidden_dim=128, num_moves=10).to(device)
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=device)
             self.model.load_state_dict(state)
@@ -46,63 +49,74 @@ class Trainer:
 
         # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs * 2)
 
         # Replay buffer
         self.buffer = ReplayBuffer(self.buffer_path)
 
-    def train(self, epochs: int = 5, batch_size: int = 32) -> None:
-        """
-        Trains the model using data from the replay buffer.
-        """
-        # Load all experiences
-        obs_all, actions_all, rewards_all, move_tensor_all = self.buffer.get_all()
+    def train(self, batch_size: int = 32, clip_eps: float = 0.2, value_coeff: float = 0.5,
+              entropy_coeff: float = 0.01):
+        obs_all, actions_all, rewards_all, move_tensor_all, old_log_probs_all, value_estimates_all = self.buffer.get_all()
         dataset_size = len(actions_all)
-        self.logger.info("Starting training: %d samples, %d epochs", dataset_size, epochs)
+        self.logger.info("Starting PPO training: %d samples, %d epochs", dataset_size, self.epochs)
 
         step = 0
-        for epoch in range(1, epochs + 1):
+        for epoch in range(1, self.epochs + 1):
             permutation = torch.randperm(dataset_size)
 
             for start in range(0, dataset_size, batch_size):
                 indices = permutation[start:start + batch_size]
 
-                # Batch data
-                obs_batch = {k: v[indices].to(device) for k, v in obs_all.items()}
-                actions_batch = actions_all[indices].to(device)
-                rewards_batch = rewards_all[indices].to(device)
-                moves_batch = move_tensor_all[indices].to(device)
+                # Batch
+                obs = {k: v[indices].to(device) for k, v in obs_all.items()}
+                actions = actions_all[indices].to(device)
+                rewards = rewards_all[indices].to(device)
+                moves = move_tensor_all[indices].to(device)
+                old_log_probs = old_log_probs_all[indices].to(device)
+                old_values = value_estimates_all[indices].to(device)
 
-                # Forward & loss
+                # Forward pass
                 self.optimizer.zero_grad()
-                logits, values = self.model(obs_batch, moves_batch)
+                logits, values = self.model(obs, moves)
 
-                policy_loss = F.cross_entropy(logits, actions_batch, reduction='none')
-                policy_loss = (policy_loss * rewards_batch).mean()
-                value_loss = F.mse_loss(values, rewards_batch)
-                total_loss = policy_loss + 0.5 * value_loss
+                # Calculate log probs of selected actions
+                log_probs = torch.log_softmax(logits, dim=-1)
+                action_log_probs = log_probs.gather(1, actions.unsqueeze(-1)).squeeze(-1)
 
-                # Backprop
+                # Advantage estimation (simplified as reward - old_value)
+                advantages = rewards - old_values
+
+                # PPO policy loss with clipped objective
+                ratio = torch.exp(action_log_probs - old_log_probs)
+                clipped_ratio = torch.clamp(ratio, 1 - clip_eps, 1 + clip_eps)
+                policy_loss = -torch.min(ratio * advantages, clipped_ratio * advantages).mean()
+
+                # Value loss
+                value_loss = F.mse_loss(values, rewards)
+
+                # Entropy bonus (encourages exploration)
+                entropy = -(log_probs * torch.exp(log_probs)).sum(dim=1).mean()
+
+                # Total loss
+                total_loss = policy_loss + value_coeff * value_loss - entropy_coeff * entropy
                 total_loss.backward()
                 self.optimizer.step()
+                self.scheduler.step()
 
-                # Logging
                 if self.wandb_run:
-                    self.wandb_run.log(
-                        {
-                            "policy_loss": policy_loss.item(),
-                            "value_loss": value_loss.item(),
-                            "total_loss": total_loss.item(),
-                            "epoch": epoch,
-                            "step": step,
-                        }
-                    )
+                    self.wandb_run.log({
+                        "ppo_policy_loss": policy_loss.item(),
+                        "ppo_value_loss": value_loss.item(),
+                        "ppo_total_loss": total_loss.item(),
+                        "ppo_entropy": entropy.item(),
+                        "epoch": epoch,
+                        "step": step,
+                    })
+
                 step += 1
 
-            self.logger.info(
-                "Epoch %d/%d completed. Total loss: %.4f", epoch, epochs, total_loss.item()
-            )
+            self.logger.info("Epoch %d/%d complete | Total loss: %.4f", epoch, self.epochs, total_loss.item())
 
-        # Save final model
         self._save_model()
         self.buffer.archive_buffer()
 

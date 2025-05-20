@@ -38,8 +38,8 @@ class TavernSelfAttention(nn.Module):
 class BetterNetV2(nn.Module):
     def __init__(
         self,
-        hidden_dim: int = 10,
-        num_moves: int = 64,
+        hidden_dim: int = 64,
+        num_moves: int = 10,
     ) -> None:
         super().__init__()
         # feature dims

@@ -21,6 +21,7 @@ class BetterNetBot(BaseAI):
         self,
         model: torch.nn.Module,
         bot_name: str = "BetterNet",
+        save_trajectory=True
     ):
         super().__init__(bot_name=bot_name)
         self.model = model
@@ -29,6 +30,7 @@ class BetterNetBot(BaseAI):
         self.move_history: List[dict] = []
         self.trajectory: List[dict] = []
         self.winner: Optional[str] = None
+        self.save_trajectory_flag = save_trajectory
 
     def pregame_prepare(self) -> None:
         """Reset history and trajectory before each game."""
@@ -42,10 +44,10 @@ class BetterNetBot(BaseAI):
         return available_patrons[0]
 
     def play(
-        self,
-        game_state: GameState,
-        possible_moves: List[BasicMove],
-        remaining_time: int,
+            self,
+            game_state: GameState,
+            possible_moves: List[BasicMove],
+            remaining_time: int,
     ) -> BasicMove:
         # Convert state to tensors
         obs = game_state_to_tensor_dict(game_state)
@@ -62,11 +64,12 @@ class BetterNetBot(BaseAI):
             batch = move_tensors + padding
         move_batch = torch.stack(batch, dim=0).unsqueeze(0)
 
-        # Compute action probabilities
+        # Compute action probabilities and value
         with torch.no_grad():
-            logits, _ = self.model(obs, move_batch)
+            logits, value = self.model(obs, move_batch)  # logits: [1, N], value: [1]
             probs = torch.softmax(logits, dim=-1).cpu().numpy().flatten()
-        probs = probs[: len(possible_moves)]
+
+        probs = probs[:len(possible_moves)]
         total = probs.sum()
         if total > 0:
             probs /= total
@@ -74,15 +77,17 @@ class BetterNetBot(BaseAI):
         else:
             idx = 0
 
-        # Record for training
+        # Record for PPO training
         self.trajectory.append({
             "state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
             "move_tensor": move_batch.squeeze(0).cpu(),
             "action_idx": idx,
             "reward": None,
+            "old_log_prob": float(np.log(probs[idx] + 1e-8)),  # avoid log(0)
+            "value_estimate": value.item()
         })
-        self.move_history.append({"game_state": game_state, "chosen_move_idx": idx})
 
+        self.move_history.append({"game_state": game_state, "chosen_move_idx": idx})
         return possible_moves[idx]
 
     def game_end(self, end_game_state: EndGameState, final_state: GameState) -> None:
@@ -94,7 +99,9 @@ class BetterNetBot(BaseAI):
 
         for step in self.trajectory:
             step["reward"] = reward
-        self.save_trajectory()
+
+        if self.save_trajectory_flag:
+            self.save_trajectory()
 
     def save_trajectory(self) -> None:
         buffer_dir = Path("game_buffers")

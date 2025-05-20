@@ -23,7 +23,7 @@ class RolloutWorker:
         self.num_games = num_games
 
         # Load primary model
-        self.model = BetterNetV2(hidden_dim=10, num_moves=98)
+        self.model = BetterNetV2(hidden_dim=128, num_moves=10)
         if self.model_path and self.model_path.exists():
             self._load_state(self.model, self.model_path, "primary")
         else:
@@ -31,7 +31,7 @@ class RolloutWorker:
         self.model.eval()
 
         if self.opponent_path and self.opponent_path.exists():
-            self.opponent_model = BetterNetV2(hidden_dim=10, num_moves=98)
+            self.opponent_model = BetterNetV2(hidden_dim=128, num_moves=10)
             if self._load_state(self.opponent_model, self.opponent_path, "opponent"):
                 self.opponent_model.eval()
         else:
@@ -62,7 +62,8 @@ class RolloutWorker:
         # Instantiate bots
         bot1 = BetterNetBot(self.model, bot_name="BetterNet")
         if self.opponent_model:
-            bot2 = BetterNetBot(self.opponent_model, bot_name="BetterNetOpponent")
+            save_trajectory = True if self.model_path == self.opponent_path else False;
+            bot2 = BetterNetBot(self.opponent_model, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
         else:
             bot2 = RandomBot(bot_name="RandomBot")
 

@@ -45,14 +45,15 @@ def main() -> None:
     while True:
         try:
             primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_opponent_model()
+            opponent_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            #opponent_model_path = select_opponent_model()
 
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
             worker = RolloutWorker(
                 model_path=primary_model_path,
-                opponent_path=opponent_model_path,
+                opponent_path=get_model_version_path(MODEL_DIR, MODEL_PREFIX, offset=4),
                 num_games=GAMES_PER_CYCLE
             )
             worker.run()

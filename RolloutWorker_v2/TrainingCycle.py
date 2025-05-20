@@ -24,8 +24,8 @@ USED_BUFFER_DIR = Path("used_buffers")
 GAMES_PER_CYCLE = 64
 EPOCHS_PER_CYCLE = 5
 BATCH_SIZE = 32
-LEARNING_RATE = 1e-5
-SLEEP_IF_NO_DATA = 300
+LEARNING_RATE = 1e-4
+SLEEP_IF_NO_DATA = 180
 
 
 def main():
@@ -79,10 +79,10 @@ def main():
                 buffer_path=MERGED_BUFFER_PATH,
                 save_path=SAVE_MODEL_PATH,
                 wandb_run=wandb_run,
-                lr=LEARNING_RATE
+                lr=LEARNING_RATE,
+                epochs=EPOCHS_PER_CYCLE
             )
             trainer.train(
-                epochs=EPOCHS_PER_CYCLE,
                 batch_size=BATCH_SIZE
             )
 
