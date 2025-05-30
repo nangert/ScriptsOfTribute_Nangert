@@ -3,6 +3,7 @@
 import logging
 import time
 from pathlib import Path
+import re
 
 import torch
 import wandb
@@ -18,14 +19,24 @@ MODEL_PREFIX = "better_net_v"
 SAVE_MODEL_PATH = MODEL_DIR
 
 GAME_BUFFERS_DIR = Path("game_buffers")
-MERGED_BUFFER_PATH = Path("saved_buffers/BetterNet_buffer.pkl")
-USED_BUFFER_DIR = Path("used_buffers")
+MERGED_BUFFER_DIR = Path("saved_buffers")
 
 GAMES_PER_CYCLE = 64
 EPOCHS_PER_CYCLE = 5
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-4
 SLEEP_IF_NO_DATA = 180
+
+def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_buffer"):
+    pattern = re.compile(rf"{base_filename}_(\d+)\.pkl")
+    buffers = [
+        (int(m.group(1)), file)
+        for file in buffer_dir.glob("*.pkl")
+        if (m := pattern.match(file.name))
+    ]
+    if not buffers:
+        return None
+    return min(buffers)[1]
 
 
 def main():
@@ -52,21 +63,10 @@ def main():
     try:
         while True:
             # Check if there are at least GAMES_PER_CYCLE new game buffers
-            available_buffers = list(GAME_BUFFERS_DIR.glob("*.pkl"))
+            buffer_file = get_lowest_buffer_file(MERGED_BUFFER_DIR)
 
-            if len(available_buffers) < GAMES_PER_CYCLE:
-                logger.info(
-                    "Not enough new data to train (%d found, %d required). Sleeping for %d seconds...",
-                    len(available_buffers), GAMES_PER_CYCLE, SLEEP_IF_NO_DATA
-                )
-                time.sleep(SLEEP_IF_NO_DATA)
-                continue
-
-            logger.info("Merging %d new replay buffers...", len(available_buffers))
-            merge_replay_buffers(GAME_BUFFERS_DIR, MERGED_BUFFER_PATH)
-
-            if not MERGED_BUFFER_PATH.exists() or MERGED_BUFFER_PATH.stat().st_size == 0:
-                logger.warning("Merged buffer is empty after merging. Sleeping...")
+            if buffer_file is None:
+                logger.warning("No buffer file found. Sleeping...")
                 time.sleep(SLEEP_IF_NO_DATA)
                 continue
 
@@ -76,7 +76,7 @@ def main():
 
             trainer = Trainer(
                 model_path=model_path,
-                buffer_path=MERGED_BUFFER_PATH,
+                buffer_path=buffer_file,
                 save_path=SAVE_MODEL_PATH,
                 wandb_run=wandb_run,
                 lr=LEARNING_RATE,

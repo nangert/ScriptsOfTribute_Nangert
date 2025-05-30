@@ -5,7 +5,11 @@ from datetime import datetime
 from pathlib import Path
 
 from RolloutWorker_v2.RolloutWorker import RolloutWorker
+from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path, get_model_version_path
+
+GAME_BUFFERS_DIR = Path("game_buffers")
+MERGED_BUFFER_PATH = Path("saved_buffers")
 
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -57,6 +61,8 @@ def main() -> None:
                 num_games=GAMES_PER_CYCLE
             )
             worker.run()
+
+            merge_replay_buffers(GAME_BUFFERS_DIR, MERGED_BUFFER_PATH)
 
             # Write generation summary log
             with open(LOG_DIR / "generation_summary.log", "a") as f:

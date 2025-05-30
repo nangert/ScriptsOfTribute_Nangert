@@ -21,7 +21,8 @@ class BetterNetBot(BaseAI):
         self,
         model: torch.nn.Module,
         bot_name: str = "BetterNet",
-        save_trajectory=True
+        save_trajectory=True,
+        evaluate=False
     ):
         super().__init__(bot_name=bot_name)
         self.model = model
@@ -31,6 +32,7 @@ class BetterNetBot(BaseAI):
         self.trajectory: List[dict] = []
         self.winner: Optional[str] = None
         self.save_trajectory_flag = save_trajectory
+        self.evaluate = evaluate
 
     def pregame_prepare(self) -> None:
         """Reset history and trajectory before each game."""
@@ -71,9 +73,13 @@ class BetterNetBot(BaseAI):
 
         probs = probs[:len(possible_moves)]
         total = probs.sum()
+
         if total > 0:
             probs /= total
-            idx = int(np.random.choice(len(probs), p=probs))
+            if self.evaluate:
+                idx = int(probs.argmax())
+            else:
+                idx = int(np.random.choice(len(probs), p=probs))
         else:
             idx = 0
 
