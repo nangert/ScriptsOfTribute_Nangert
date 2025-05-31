@@ -28,7 +28,6 @@ class BetterNetBot_v3(BaseAI):
         self.model = model
         self.model.eval()
 
-        self.move_history: List[dict] = []
         self.trajectory: List[dict] = []
         self.winner: Optional[str] = None
         self.save_trajectory_flag = save_trajectory
@@ -36,13 +35,16 @@ class BetterNetBot_v3(BaseAI):
         self.hidden = None
 
     def pregame_prepare(self) -> None:
-        """Reset history and trajectory before each game."""
-        self.move_history.clear()
+        """Reset history, trajectory, winner and lstm-hidden-layer before each game."""
         self.trajectory.clear()
         self.winner = None
         self.hidden = None
 
     def select_patron(self, available_patrons: List[PatronId]) -> PatronId:
+        """
+        For now always select first available patron
+        Todo: Add Patron selection as own stage to NN
+        """
         if not available_patrons:
             raise ValueError("No available patrons to select from.")
         return available_patrons[0]
@@ -53,21 +55,36 @@ class BetterNetBot_v3(BaseAI):
         possible_moves: List[BasicMove],
         remaining_time: int,
     ) -> BasicMove:
+        """
+        Gets game_state and possible_moves
+        If self.evaluate = True chooses move with the highest probability
+        If self.evaluate = False samples move from probability distribution
+        """
+
         # 1) Convert state to tensors
         obs = game_state_to_tensor_dict(game_state)
+
         # each obs[k] is a 1D or 2D tensor for B=1, so add batch‐and‐time dims:
         obs = {k: v.unsqueeze(0) for k, v in obs.items()}
         #    → obs["player_stats"]:  [1, player_dim]
         #       obs["patron_tensor"]: [1, 10, 2]
         #       obs["tavern_tensor"]: [1, C, card_dim]
 
-        # 2) Build move_batch = [1, N, D]: same as before
+        # 2) Build move_batch = [1, N, D]
         move_tensors = [move_to_tensor(m, game_state) for m in possible_moves]
+
+        # Max_moves -> amount of moves always get padded to 10
+        # NN outputs always 10 probabilities
+        # only first n moves are considered (n = len(possible_moves))
         max_moves = 10
+        # MOVE_FEAT_DIM comes from move_to_tensor in utils file
         move_dim = MOVE_FEAT_DIM
+
+        # if amount of possible moves is > 10 then truncate possible moves (end_turn is always last move)
         if len(move_tensors) >= max_moves:
             batch = move_tensors[:max_moves]
         else:
+            # otherwise add padding moves
             padding = [torch.zeros(move_dim) for _ in range(max_moves - len(move_tensors))]
             batch = move_tensors + padding
         move_batch = torch.stack(batch, dim=0).unsqueeze(0)  # [1, max_moves, D]
@@ -82,9 +99,11 @@ class BetterNetBot_v3(BaseAI):
 
         # 5) Convert logits → probabilities → pick an index
         probs = torch.softmax(logits, dim=-1).cpu().numpy().flatten()
+        # probs is always length 10 rn, possible moves probably less so only have first n as options
         probs = probs[:len(possible_moves)]
         total = probs.sum()
 
+        # fallback if all probabilities in first n probs are 0, then always picks first possible move
         if total > 0:
             probs /= total
             if self.evaluate:
@@ -94,7 +113,7 @@ class BetterNetBot_v3(BaseAI):
         else:
             idx = 0
 
-        # 6) Record for PPO
+        # 6) Save sample in episode / trajectory, discounted reward set at end of episode
         self.trajectory.append({
             "state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
             "move_tensor": move_batch.squeeze(0).cpu(),
@@ -104,28 +123,24 @@ class BetterNetBot_v3(BaseAI):
             "value_estimate": value.item()
         })
 
-        self.move_history.append({"game_state": game_state, "chosen_move_idx": idx})
+        # return chosen move to GameRunner
         return possible_moves[idx]
 
     def game_end(self, end_game_state: EndGameState, final_state: GameState) -> None:
-        # Assign a final “win/lose” signal to every step in the trajectory,
-        # but then multiply by γ^(remaining_steps) so earlier steps get smaller credit.
+        """
+        Determine game-winner and set reward for all steps
+        Reward gets discounted by γ for each step
+        """
 
         winner = end_game_state.winner
         if winner == "PLAYER1":
             final_reward = 1.0
         else:
-            # if the opponent won or it's a draw/unknown, give −1
             final_reward = -1.0
 
         γ = 0.99
         N = len(self.trajectory)
 
-        # If there were N steps, index runs 0..N-1; we want:
-        #   step 0 → γ^(N-1) * final_reward
-        #   step 1 → γ^(N-2) * final_reward
-        #   …
-        #   step N-1 (last) → γ^0 * final_reward == final_reward
         for t, step in enumerate(self.trajectory):
             discount_multiplier = γ ** (N - 1 - t)
             step["reward"] = final_reward * discount_multiplier
@@ -134,6 +149,10 @@ class BetterNetBot_v3(BaseAI):
             self.save_trajectory()
 
     def save_trajectory(self) -> None:
+        """
+        Save trajectory to game_buffer
+        Uses UUID to create file for each episode and avoid conflict when multiple episodes are saved simultaneously in subprocesses/threads
+        """
         buffer_dir = Path("game_buffers")
         buffer_dir.mkdir(parents=True, exist_ok=True)
         filename = buffer_dir / f"{self.bot_name}_buffer_{uuid.uuid4().hex}.pkl"

@@ -11,32 +11,36 @@ from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from RandomBot.RandomBot import RandomBot
 
 class RolloutWorker:
+    """
+    Rollout worker for loading models from file_paths and running GameRunner with loaded models
+    bot2_model_path is optional, if None then selects RandomBot instead of NN-model
+    """
     def __init__(
         self,
-        model_path: Path,
-        opponent_path: Optional[Path],
+        bot1_model_path: Path,
+        bot2_model_path: Optional[Path],
         num_games: int = 10,
     ):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.model_path = model_path
-        self.opponent_path = opponent_path
+        self.bot1_model_path = bot1_model_path
+        self.bot2_model_path = bot2_model_path
         self.num_games = num_games
 
         # Load primary model
-        self.model = BetterNetV3(hidden_dim=128, num_moves=10)
-        if self.model_path and self.model_path.exists():
-            self._load_state(self.model, self.model_path, "primary")
+        self.bot1_model = BetterNetV3(hidden_dim=128, num_moves=10)
+        if self.bot1_model_path and self.bot1_model_path.exists():
+            self._load_state(self.bot1_model, self.bot1_model_path, "primary")
         else:
             self.logger.warning("Primary model not found; using random initialization.")
-        self.model.eval()
+        self.bot1_model.eval()
 
-        if self.opponent_path and self.opponent_path.exists():
-            self.opponent_model = BetterNetV3(hidden_dim=128, num_moves=10)
-            if self._load_state(self.opponent_model, self.opponent_path, "opponent"):
-                self.opponent_model.eval()
+        if self.bot2_model_path and self.bot2_model_path.exists():
+            self.bot2_model = BetterNetV3(hidden_dim=128, num_moves=10)
+            if self._load_state(self.bot2_model, self.bot2_model_path, "opponent"):
+                self.bot2_model.eval()
         else:
             self.logger.info("Using RandomBot as opponent for resource efficiency.")
-            self.opponent_model = None
+            self.bot2_model = None
 
     def _load_state(
         self, model: torch.nn.Module, path: Path, name: str
@@ -59,16 +63,14 @@ class RolloutWorker:
         """Execute the configured number of self-play games."""
         self.logger.info("Starting %d games", self.num_games)
 
-        # Instantiate bots
-        bot1 = BetterNetBot_v3(self.model, bot_name="BetterNet")
-        if self.opponent_model:
-            save_trajectory = True if self.model_path == self.opponent_path else False;
-            bot2 = BetterNetBot_v3(self.opponent_model, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
+        # Instantiate bots, use RandomBot if bot2_model not available
+        bot1 = BetterNetBot_v3(self.bot1_model, bot_name="BetterNet")
+        if self.bot2_model:
+            save_trajectory = True if self.bot1_model_path == self.bot2_model_path else False;
+            bot2 = BetterNetBot_v3(self.bot2_model, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
         else:
             bot2 = RandomBot(bot_name="RandomBot")
 
-
-        # Register and run
         game = Game()
         game.register_bot(bot1)
         game.register_bot(bot2)
