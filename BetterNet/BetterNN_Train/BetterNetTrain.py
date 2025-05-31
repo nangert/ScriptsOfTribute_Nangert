@@ -7,8 +7,8 @@ import os
 
 from scripts_of_tribute.game import Game
 
-from BetterNN_Bot.BetterNet import BetterNet
-from BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
+from BetterNet.BetterNN.BetterNet_v1 import BetterNet
+from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from RandomBot.RandomBot import RandomBot
 from utils.game_state_to_vector import game_state_to_tensor_dict
 

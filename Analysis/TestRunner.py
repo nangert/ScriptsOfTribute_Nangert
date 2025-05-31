@@ -2,11 +2,10 @@
 import torch
 from pathlib import Path
 
-from BetterNN.BetterNet_v3 import BetterNetV3
-from BetterNN_Bot.BetterNetBot_v2 import BetterNetBot_v2
-from BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
-from BetterNN.BetterNet_v2 import BetterNetV2
-from RandomBot.RandomBot import RandomBot
+from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
+from BetterNet.BetterNN_Bot.BetterNetBot_v2 import BetterNetBot_v2
+from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
+from BetterNet.BetterNN.BetterNet_v2 import BetterNetV2
 from utils.model_versioning import get_latest_model_path
 
 MODEL_DIR = Path("saved_models")

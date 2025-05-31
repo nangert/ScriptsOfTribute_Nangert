@@ -2,8 +2,8 @@
 import torch.nn as nn
 from typing import Dict, Tuple
 
-from BetterNN.ResidualMLP import ResidualMLP
-from BetterNN.TavernSelfAttention import TavernSelfAttention
+from BetterNet.BetterNN.ResidualMLP import ResidualMLP
+from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
 from utils.move_to_tensor import MOVE_FEAT_DIM
 
 class BetterNetV2(nn.Module):

@@ -6,8 +6,8 @@ from typing import Optional
 import torch
 from scripts_of_tribute.game import Game
 
-from BetterNN.BetterNet_v3 import BetterNetV3
-from BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
+from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
+from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from RandomBot.RandomBot import RandomBot
 
 class RolloutWorker:

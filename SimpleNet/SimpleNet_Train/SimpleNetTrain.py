@@ -7,8 +7,8 @@ import numpy as np
 from scripts_of_tribute.game import Game
 
 from RandomBot.RandomBot import RandomBot
-from Bots.SimpleNetBot import NNBot
-from SimpleNet import SimpleNet
+from SimpleNet.SimpleNN.SimpleNet import SimpleNet
+from SimpleNet.SimpleNet_Bot.SimpleNetBot import NNBot
 from utils.game_state_to_vector import game_state_to_tensor_dict
 
 

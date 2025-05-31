@@ -3,12 +3,11 @@ from pathlib import Path
 from typing import Optional
 
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
 import wandb
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from BetterNN.BetterNet_v3 import BetterNetV3
+from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
 from utils.ReplayBuffer import ReplayBuffer
 
 # Device configuration
