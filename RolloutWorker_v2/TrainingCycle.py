@@ -24,8 +24,8 @@ MERGED_BUFFER_DIR = Path("saved_buffers")
 GAMES_PER_CYCLE = 64
 EPOCHS_PER_CYCLE = 5
 BATCH_SIZE = 32
-LEARNING_RATE = 1e-4
-SLEEP_IF_NO_DATA = 180
+LEARNING_RATE = 3e-5
+SLEEP_IF_NO_DATA = 60
 
 def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_buffer"):
     pattern = re.compile(rf"{base_filename}_(\d+)\.pkl")
@@ -55,7 +55,7 @@ def main():
             "epochs_per_cycle": EPOCHS_PER_CYCLE,
             "batch_size": BATCH_SIZE,
             "learning_rate": LEARNING_RATE,
-            "model": "BetterNetV2",
+            "model": "BetterNetV3",
         },
         name="continuous_training_run"
     )

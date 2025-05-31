@@ -6,8 +6,8 @@ from typing import Optional
 import torch
 from scripts_of_tribute.game import Game
 
-from BetterNN_v2.BetterNet_v2 import BetterNetV2
-from BetterNN.BetterNetBot import BetterNetBot
+from BetterNN.BetterNet_v3 import BetterNetV3
+from BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from RandomBot.RandomBot import RandomBot
 
 class RolloutWorker:
@@ -23,7 +23,7 @@ class RolloutWorker:
         self.num_games = num_games
 
         # Load primary model
-        self.model = BetterNetV2(hidden_dim=128, num_moves=10)
+        self.model = BetterNetV3(hidden_dim=128, num_moves=10)
         if self.model_path and self.model_path.exists():
             self._load_state(self.model, self.model_path, "primary")
         else:
@@ -31,7 +31,7 @@ class RolloutWorker:
         self.model.eval()
 
         if self.opponent_path and self.opponent_path.exists():
-            self.opponent_model = BetterNetV2(hidden_dim=128, num_moves=10)
+            self.opponent_model = BetterNetV3(hidden_dim=128, num_moves=10)
             if self._load_state(self.opponent_model, self.opponent_path, "opponent"):
                 self.opponent_model.eval()
         else:
@@ -60,10 +60,10 @@ class RolloutWorker:
         self.logger.info("Starting %d games", self.num_games)
 
         # Instantiate bots
-        bot1 = BetterNetBot(self.model, bot_name="BetterNet")
+        bot1 = BetterNetBot_v3(self.model, bot_name="BetterNet")
         if self.opponent_model:
             save_trajectory = True if self.model_path == self.opponent_path else False;
-            bot2 = BetterNetBot(self.opponent_model, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
+            bot2 = BetterNetBot_v3(self.opponent_model, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
         else:
             bot2 = RandomBot(bot_name="RandomBot")
 

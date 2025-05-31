@@ -57,7 +57,7 @@ def main() -> None:
 
             worker = RolloutWorker(
                 model_path=primary_model_path,
-                opponent_path=get_model_version_path(MODEL_DIR, MODEL_PREFIX, offset=4),
+                opponent_path=None,
                 num_games=GAMES_PER_CYCLE
             )
             worker.run()

@@ -16,7 +16,7 @@ def main() -> None:
     )
 
     # Specify the exact pickle file to load
-    pkl_path = Path("../game_buffers/BetterNet_buffer_f64c2e80ee4642ff83a735a525d0cca3.pkl")
+    pkl_path = Path("../game_buffers/BetterNet_buffer_51488aa318a0420b8ed74dac18126254.pkl")
 
     if not pkl_path.is_file():
         logging.error(f"File not found: {pkl_path.resolve()}")

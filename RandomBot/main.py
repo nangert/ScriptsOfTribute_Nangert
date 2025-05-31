@@ -2,8 +2,8 @@
 from scripts_of_tribute.game import Game
 from scripts_of_tribute.runner import run_game_runner
 
-from BetterNN.BetterNet import BetterNet
-from BetterNN.BetterNetBot import BetterNetBot
+from BetterNN_Bot.BetterNet import BetterNet
+from BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from RandomBot import RandomBot
 
 
@@ -12,7 +12,7 @@ def main():
     output_size = 10
 
     model = BetterNet(input_size, output_size)
-    bot1 = BetterNetBot(model, bot_name="BetterNet")
+    bot1 = BetterNetBot_v3(model, bot_name="BetterNet")
     bot2 = RandomBot(bot_name="RandomBot2")
 
     game = Game()

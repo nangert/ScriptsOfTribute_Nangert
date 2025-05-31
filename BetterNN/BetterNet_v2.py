@@ -1,39 +1,10 @@
 ﻿import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from typing import Dict, Tuple
 
+from BetterNN.ResidualMLP import ResidualMLP
+from BetterNN.TavernSelfAttention import TavernSelfAttention
 from utils.move_to_tensor import MOVE_FEAT_DIM
-
-
-class ResidualMLP(nn.Module):
-    def __init__(self, dim: int, hidden_dim: int) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, dim)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = F.relu(self.fc1(x))
-        return x + self.fc2(h)
-
-
-class TavernSelfAttention(nn.Module):
-    def __init__(self, dim: int, hidden_dim: int) -> None:
-        super().__init__()
-        self.q = nn.Linear(dim, hidden_dim)
-        self.k = nn.Linear(dim, hidden_dim)
-        self.v = nn.Linear(dim, hidden_dim)
-        self.out = nn.Linear(hidden_dim, hidden_dim)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: [B, N, D]
-        q = self.q(x)
-        k = self.k(x)
-        v = self.v(x)
-        scores = torch.softmax(q @ k.transpose(-2, -1) / (k.size(-1) ** 0.5), dim=-1)
-        context = (scores @ v).mean(dim=1)
-        return self.out(context)
-
 
 class BetterNetV2(nn.Module):
     def __init__(

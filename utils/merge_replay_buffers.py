@@ -10,16 +10,14 @@ def merge_replay_buffers(buffer_dir: Path, merged_buffer_dir: Path, used_buffers
         try:
             with open(buffer_file, "rb") as f:
                 data = pickle.load(f)
-                all_data.extend(data)
+                all_data.append(data)  # <== preserve as episode list
             buffer_file.unlink()
         except Exception as e:
             print(f"Error reading {buffer_file}: {e}")
 
-    # Ensure merged_buffer_dir exists
     merged_buffer_dir.mkdir(parents=True, exist_ok=True)
     used_buffers_dir.mkdir(parents=True, exist_ok=True)
 
-    # Find the highest existing number from both directories
     pattern = re.compile(rf"{base_filename}_(\d+)\.pkl")
     existing_numbers = [
         int(match.group(1))
@@ -29,11 +27,9 @@ def merge_replay_buffers(buffer_dir: Path, merged_buffer_dir: Path, used_buffers
     ]
 
     next_number = max(existing_numbers, default=0) + 1
-
-    # New merged buffer path with incremented number
     merged_buffer_path = merged_buffer_dir / f"{base_filename}_{next_number}.pkl"
 
     with open(merged_buffer_path, "wb") as f:
-        pickle.dump(all_data, f)
+        pickle.dump(all_data, f)  # <== saves list of episodes
 
-    print(f"[ReplayBuffer] Merged {len(all_data)} steps into {merged_buffer_path}")
+    print(f"[ReplayBuffer] Merged {len(all_data)} episodes into {merged_buffer_path}")

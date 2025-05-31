@@ -7,15 +7,15 @@ import os
 
 from scripts_of_tribute.game import Game
 
-from BetterNN.BetterNet import BetterNet
-from BetterNN.BetterNetBot import BetterNetBot
+from BetterNN_Bot.BetterNet import BetterNet
+from BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from RandomBot.RandomBot import RandomBot
 from utils.game_state_to_vector import game_state_to_tensor_dict
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train_one_game(model, optimizer, wandb_run, episode):
-    bot1 = BetterNetBot(model, bot_name="BetterNet")
+    bot1 = BetterNetBot_v3(model, bot_name="BetterNet")
     bot2 = RandomBot(bot_name="RandomBot2")
 
     game = Game()

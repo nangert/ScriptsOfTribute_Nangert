@@ -12,7 +12,7 @@ from utils.game_state_to_vector import game_state_to_tensor_dict
 from utils.move_to_tensor import move_to_tensor, MOVE_FEAT_DIM
 
 
-class BetterNetBot(BaseAI):
+class BetterNetBot_v2(BaseAI):
     """
     Bot that uses a neural network policy to select moves.
     """
