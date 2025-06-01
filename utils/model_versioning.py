@@ -2,6 +2,9 @@
 from typing import Optional
 
 def get_latest_model_path(base_dir: Path, model_prefix: str = "better_net_v", extension: str = ".pt") -> Path:
+    """
+    :return the latest model path in dir with specific prefix
+    """
     base_dir.mkdir(parents=True, exist_ok=True)
     existing_models = list(base_dir.glob(f"{model_prefix}*{extension}"))
 
@@ -18,6 +21,10 @@ def get_latest_model_path(base_dir: Path, model_prefix: str = "better_net_v", ex
     return base_dir / f"{model_prefix}{latest_version}{extension}"
 
 def get_model_version_path(base_dir: Path, prefix: str = "better_net_v", extension: str = ".pt", offset: int = 0) -> Optional[Path]:
+    """
+    compared to get_latest_model_path can also handle offset to fest latest models instead of only current one
+    Todo: unify with get_latest_model_path
+    """
     base_dir.mkdir(parents=True, exist_ok=True)
     models = list(base_dir.glob(f"{prefix}*{extension}"))
     if not models:

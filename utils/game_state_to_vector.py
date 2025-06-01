@@ -7,7 +7,10 @@ CARD_TYPE_COUNT = len(CardType)
 CARD_FEATURE_DIM = 5 + CARD_TYPE_COUNT
 
 def encode_card_tensor(card: UniqueCard) -> torch.Tensor:
-    """Tensor encoding for a single card."""
+    """
+    Tensor encoding for a single card.
+    For now only uses card-properties directly, no NN-based card embedding yet.
+    """
     type_onehot = torch.zeros(CARD_TYPE_COUNT)
     type_onehot[card.type.value] = 1.0
 
@@ -22,15 +25,24 @@ def encode_card_tensor(card: UniqueCard) -> torch.Tensor:
     return torch.cat([base_features, type_onehot], dim=0)
 
 def game_state_to_tensor_dict(gs: GameState) -> dict[str, torch.Tensor]:
+    """
+    Turns GameState into a tensor dictionary.
+    Includes:
+    - player_stats: features corresponding to the own player
+    - patron_tensor: one-hot encoding of selected patrons for own player
+    - tavern_tensor: encodes tavern cards into list of card_tensors
+
+    Todo: cards as embeddings, hand cards as input head, board state as input head,...
+    """
     cur = gs.current_player
-    enn = gs.enemy_player
+    opponent = gs.enemy_player
 
     player_stats = torch.tensor([
         float(cur.coins), float(cur.power), float(cur.prestige),
         len(cur.hand), len(cur.cooldown_pile), len(cur.played),
         len(cur.draw_pile), float(cur.patron_calls),
-        float(enn.coins), float(enn.power), float(enn.prestige),
-        len(enn.hand_and_draw), len(enn.cooldown_pile), len(enn.played)
+        float(opponent.coins), float(opponent.power), float(opponent.prestige),
+        len(opponent.hand_and_draw), len(opponent.cooldown_pile), len(opponent.played)
     ], dtype=torch.float32)
 
     # Patron ownership tensor
@@ -38,7 +50,7 @@ def game_state_to_tensor_dict(gs: GameState) -> dict[str, torch.Tensor]:
     for i, pid in enumerate(PatronId):
         if gs.patron_states.patrons.get(pid) == cur.player_id:
             patron_tensor[i][0] = 1.0
-        elif gs.patron_states.patrons.get(pid) == enn.player_id:
+        elif gs.patron_states.patrons.get(pid) == opponent.player_id:
             patron_tensor[i][1] = 1.0
 
     # Tavern cards tensor

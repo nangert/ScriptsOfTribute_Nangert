@@ -4,14 +4,22 @@ from scripts_of_tribute.enums import MoveEnum, PatronId
 from utils.game_state_to_vector import encode_card_tensor
 from scripts_of_tribute.board import GameState
 
+# 7 different MoveTypes (e.g. Play_Card, Attack, End_Turn,...)
 NUM_MOVE_TYPES = len(MoveEnum)
+
+# currently 10 different Patrons implemented
 NUM_PATRONS = len(PatronId)
+
+# currently 11 -> len(CardType) (6) + base_features (5)
 CARD_EMBED_DIM = 11
 MOVE_FEAT_DIM = 2 + NUM_MOVE_TYPES + NUM_PATRONS + CARD_EMBED_DIM
 
 def move_to_tensor(move: BasicMove, game_state: GameState) -> torch.Tensor:
-    onehot_type = torch.zeros(NUM_MOVE_TYPES)
-    onehot_type[move.command.value] = 1.0  # Use 'command' not 'move_type'
+    """
+    Converts a basic move to a tensor representation for NN-input.
+    """
+    move_type = torch.zeros(NUM_MOVE_TYPES)
+    move_type[move.command.value] = 1.0
 
     patron_vector = torch.zeros(NUM_PATRONS)
     if isinstance(move, SimplePatronMove):
@@ -19,9 +27,9 @@ def move_to_tensor(move: BasicMove, game_state: GameState) -> torch.Tensor:
 
     card_vector = torch.zeros(CARD_EMBED_DIM)
     if isinstance(move, SimpleCardMove):
-        card_id = move.cardUniqueId  # Corrected attribute
+        # move only stores cardId -> have to fetch specific card manually first before turning it into card_tensor
+        card_id = move.cardUniqueId
 
-        # Search all known sources of cards
         all_cards = (
             game_state.current_player.hand +
             game_state.current_player.played +
@@ -35,9 +43,9 @@ def move_to_tensor(move: BasicMove, game_state: GameState) -> torch.Tensor:
         if found is not None:
             card_vector = encode_card_tensor(found)
 
-    meta = torch.tensor([
+    move_subclass = torch.tensor([
         float(isinstance(move, SimpleCardMove)),
         float(isinstance(move, SimplePatronMove)),
     ])
 
-    return torch.cat([meta, onehot_type, patron_vector, card_vector], dim=0)
+    return torch.cat([move_subclass, move_type, patron_vector, card_vector], dim=0)

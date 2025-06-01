@@ -8,8 +8,13 @@ from typing import List, Dict
 import shutil
 
 class ReplayBuffer:
+    """
+    Loads and prepares training data.
+    """
     def __init__(self, buffer_path: Path, archive_dir: Path = Path("used_buffers")):
+        # where to load data from
         self.buffer_path = buffer_path
+        # where to move file to after training
         self.archive_dir = archive_dir
         self.data = self._load()
 
@@ -34,8 +39,9 @@ class ReplayBuffer:
           value_estimates:FloatTensor [B, Tₘₐₓ]
           lengths:        LongTensor  [B]         # true length of each episode
         """
+
+        # Initialize datastructures for stored data of each episode
         obs_keys = ["player_stats", "patron_tensor", "tavern_tensor"]
-        # Temporaries to collect each episode’s unpadded sequences
         obs_unpadded: Dict[str, List[torch.Tensor]] = {k: [] for k in obs_keys}
         move_tensors_unpadded: List[torch.Tensor] = []
         actions_unpadded: List[torch.Tensor] = []
@@ -52,10 +58,11 @@ class ReplayBuffer:
             ep_rewards: List[float] = []
             ep_log_probs: List[float] = []
             ep_values: List[float] = []
-            # Collect length
+
             N = len(episode)
             lengths.append(N)
 
+            # Iterate over each step of the episode
             for step in episode:
                 state = step["state"]
                 # Each state[k] is a Tensor of shape [feat…] or [N, D] depending on k
@@ -63,12 +70,12 @@ class ReplayBuffer:
                     ep_obs[k].append(state[k])
                 ep_moves.append(step["move_tensor"])
                 ep_actions.append(step["action_idx"])
-                # Here step["reward"] is already G_t (discounted final reward)
                 ep_rewards.append(step["reward"])
                 ep_log_probs.append(step.get("old_log_prob", 0.0))
                 ep_values.append(step.get("value_estimate", 0.0))
 
             # Now pad each feature sequence in this episode to [N, feat…] → a 2D/3D tensor
+            # Padding probably not necessary but if ep_obs and ep_moves are already equal length same functionality as torch.stack
             #   Dims:
             #     - player_stats: [N, player_feat]
             #     - patron_tensor: [N, 10, 2]
@@ -77,9 +84,11 @@ class ReplayBuffer:
             for k in obs_keys:
                 # ep_obs[k] is a list of length N, each a Tensor of shape [feat…].
                 # pad_sequence(…) makes a Tensor of shape [N, feat…], because batch_first=True.
+                # alternatively could use torch.stack since ep_obs should have same length
                 obs_unpadded[k].append(
                     pad_sequence(ep_obs[k], batch_first=True)
                 )  # [N, feat…]
+            # alternatively could use torch.stack since ep_moves should have same length
             move_tensors_unpadded.append(
                 pad_sequence(ep_moves, batch_first=True)
             )  # [N, N_moves, D]
@@ -92,7 +101,9 @@ class ReplayBuffer:
                 torch.tensor(ep_values, dtype=torch.float32)
             )  # [N]
 
-        # Now pad across episodes (stack episodes on a batch dimension = B)
+        # Pad across episodes (stack episodes on a batch dimension = B)
+        # Episodes typically have different length -> padding
+        # Length of each episode is also stored to later recover the true length of the episode
         # Let Tₘₐₓ = max(lengths).
         # The result shapes will be:
         #   obs[k]:         [B, Tₘₐₓ, feat…]

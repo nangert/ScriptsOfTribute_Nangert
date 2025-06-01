@@ -15,6 +15,7 @@ from utils.move_to_tensor import move_to_tensor, MOVE_FEAT_DIM
 class BetterNetBot_v3(BaseAI):
     """
     Bot that uses a neural network policy to select moves.
+    Includes lstm-Layer.
     """
 
     def __init__(

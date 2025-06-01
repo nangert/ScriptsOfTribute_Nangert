@@ -7,6 +7,9 @@ from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
 from utils.move_to_tensor import MOVE_FEAT_DIM
 
 class BetterNetV3(nn.Module):
+    """
+    BetterNetV3 includes an additional LSTM-Layer compared to BetterNetV2
+    """
     def __init__(
         self,
         hidden_dim: int = 128,
@@ -16,32 +19,39 @@ class BetterNetV3(nn.Module):
         # ----------------------------
         # Feature dimensions
         # ----------------------------
-        self.move_feat_dim = MOVE_FEAT_DIM    # e.g. number of features per move
-        self.player_dim    = 14
-        self.patron_dim    = 10 * 2           # flattened to 20
-        self.card_dim      = 11
+        self.move_feat_dim = MOVE_FEAT_DIM
+        self.player_dim = 14
+        # 10 patrons * 2 because player (bot) chooses 2 patrons at start of game
+        self.patron_dim = 10 * 2
+        # card embedding size 11 (6 from card type + 5 from basic features
+        self.card_dim = 11
 
         # ----------------------------
         # Encoders
         # ----------------------------
+
+        # Move Encoder, Input head for available moves of current turn
         self.move_encoder = nn.Sequential(
             nn.Linear(self.move_feat_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
 
+        # Player Encoder, Input head for current player state (how many hand-cards, coins,...)
         self.player_encoder = nn.Sequential(
             nn.Linear(self.player_dim, hidden_dim),
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
 
+        # Patron Encoder, Input head for selected Patrons (One-hot encoding of selected patrons)
         self.patron_encoder = nn.Sequential(
             nn.Linear(self.patron_dim, hidden_dim),
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
 
+        # Tavern Encoder, Input head for current state of tavern, Encodes all cards currently in the tavern
         self.tavern_encoder = nn.Sequential(
             nn.Linear(self.card_dim, hidden_dim),
             nn.ReLU(),
@@ -70,7 +80,7 @@ class BetterNetV3(nn.Module):
         self.policy_proj = nn.Linear(256, hidden_dim)  # [256]→[128]
 
         # ----------------------------
-        # Heads
+        # Output Heads
         # ----------------------------
         # Critic head: from the 128-dim “fusion context” at each timestep to a scalar
         self.value_head = nn.Linear(hidden_dim, 1)
@@ -86,7 +96,7 @@ class BetterNetV3(nn.Module):
             self,
             obs: Dict[str, torch.Tensor],
             move_tensor: torch.Tensor,
-            hidden: Tuple[torch.Tensor, torch.Tensor] = None,  # <--- add hidden here
+            hidden: Tuple[torch.Tensor, torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
         Two modes:
