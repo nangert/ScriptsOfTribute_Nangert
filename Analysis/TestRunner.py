@@ -16,8 +16,8 @@ def main():
     model_v2 = BetterNetV3(hidden_dim=128, num_moves=10)
     model_v3 = BetterNetV3(hidden_dim=128, num_moves=10)
 
-    model_v2.load_state_dict(torch.load('./good_models/BetterNet_v3/better_net_v3_1.pt', map_location="cpu"))
-    model_v3.load_state_dict(torch.load('./good_models/BetterNet_v3/better_net_v3_1.pt', map_location="cpu"))
+    model_v2.load_state_dict(torch.load('./good_models/BetterNet_v3/better_net_v3_2.pt', map_location="cpu"))
+    model_v3.load_state_dict(torch.load('./good_models/BetterNet_v3/better_net_v3_3.pt', map_location="cpu"))
 
     bot1 = BetterNetBot_v3(model_v2, bot_name="BetterNet_1", evaluate=True)
     bot2 = BetterNetBot_v3(model_v3, bot_name="BetterNet_2", evaluate=True)
