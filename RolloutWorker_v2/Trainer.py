@@ -42,7 +42,7 @@ class Trainer:
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=device)
             self.model.load_state_dict(state)
-            self.logger.info("Loaded model from %s", self.model_path)
+            self.logger.info("Loaded model from %s", self.model_path.name)
         else:
             self.logger.info("No existing model found; initializing new model.")
 

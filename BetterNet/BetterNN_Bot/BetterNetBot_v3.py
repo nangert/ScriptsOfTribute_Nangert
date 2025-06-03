@@ -1,5 +1,6 @@
 ﻿import pickle
 import uuid
+import logging
 
 import numpy as np
 import torch
@@ -8,6 +9,8 @@ from typing import List, Optional
 
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
+
+from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
 from utils.game_state_to_vector import game_state_to_tensor_dict
 from utils.move_to_tensor import move_to_tensor, MOVE_FEAT_DIM
 
@@ -20,12 +23,20 @@ class BetterNetBot_v3(BaseAI):
 
     def __init__(
         self,
-        model: torch.nn.Module,
+        model_path: Path,
         bot_name: str = "BetterNet",
-        save_trajectory=True,
-        evaluate=False
+        save_trajectory: bool = True,
+        evaluate: bool = False,
     ):
         super().__init__(bot_name=bot_name)
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+        model = BetterNetV3(hidden_dim=128, num_moves=10)
+        if model_path.exists():
+            self._load_state(model, model_path, model_path.name)
+        else:
+            self.logger.warning("Primary model not found; using random initialization.")
+
         self.model = model
         self.model.eval()
 
@@ -34,6 +45,23 @@ class BetterNetBot_v3(BaseAI):
         self.save_trajectory_flag = save_trajectory
         self.evaluate = evaluate
         self.hidden = None
+
+    def _load_state(
+        self, model: torch.nn.Module, path: Path, name: str
+    ) -> bool:
+        """
+        Helper to load model state dict if available.
+        Returns True if loaded, False otherwise.
+        """
+        if path.exists():
+            state = torch.load(path, map_location="cpu")
+            model.load_state_dict(state)
+            self.logger.info("Loaded %s model from %s", name, path)
+            return True
+        self.logger.warning(
+            "No %s model found at %s; using random initialization.", name, path
+        )
+        return False
 
     def pregame_prepare(self) -> None:
         """Reset history, trajectory, winner and lstm-hidden-layer before each game."""

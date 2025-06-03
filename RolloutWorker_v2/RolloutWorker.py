@@ -26,48 +26,16 @@ class RolloutWorker:
         self.bot2_model_path = bot2_model_path
         self.num_games = num_games
 
-        # Load primary model
-        self.bot1_model = BetterNetV3(hidden_dim=128, num_moves=10)
-        if self.bot1_model_path and self.bot1_model_path.exists():
-            self._load_state(self.bot1_model, self.bot1_model_path, "primary")
-        else:
-            self.logger.warning("Primary model not found; using random initialization.")
-        self.bot1_model.eval()
-
-        if self.bot2_model_path and self.bot2_model_path.exists():
-            self.bot2_model = BetterNetV3(hidden_dim=128, num_moves=10)
-            if self._load_state(self.bot2_model, self.bot2_model_path, "opponent"):
-                self.bot2_model.eval()
-        else:
-            self.logger.info("Using RandomBot as opponent for resource efficiency.")
-            self.bot2_model = None
-
-    def _load_state(
-        self, model: torch.nn.Module, path: Path, name: str
-    ) -> bool:
-        """
-        Helper to load model state dict if available.
-        Returns True if loaded, False otherwise.
-        """
-        if path.exists():
-            state = torch.load(path, map_location="cpu")
-            model.load_state_dict(state)
-            self.logger.info("Loaded %s model from %s", name, path)
-            return True
-        self.logger.warning(
-            "No %s model found at %s; using random initialization.", name, path
-        )
-        return False
 
     def run(self) -> None:
         """Execute the configured number of self-play games."""
         self.logger.info("Starting %d games", self.num_games)
 
         # Instantiate bots, use RandomBot if bot2_model not available
-        bot1 = BetterNetBot_v3(self.bot1_model, bot_name="BetterNet")
-        if self.bot2_model:
+        bot1 = BetterNetBot_v3(self.bot1_model_path, bot_name="BetterNet")
+        if self.bot2_model_path.exists():
             save_trajectory = True if self.bot1_model_path == self.bot2_model_path else False;
-            bot2 = BetterNetBot_v3(self.bot2_model, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
+            bot2 = BetterNetBot_v3(self.bot2_model_path, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
         else:
             bot2 = RandomBot(bot_name="RandomBot")
 

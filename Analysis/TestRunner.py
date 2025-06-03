@@ -13,24 +13,19 @@ MODEL_PREFIX = "better_net_v"
 
 def main():
     primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-    model_v2 = BetterNetV3(hidden_dim=128, num_moves=10)
-    model_v3 = BetterNetV3(hidden_dim=128, num_moves=10)
 
-    model_v2.load_state_dict(torch.load('./good_models/BetterNet_v3/better_net_v3_2.pt', map_location="cpu"))
-    model_v3.load_state_dict(torch.load('./good_models/BetterNet_v3/better_net_v3_3.pt', map_location="cpu"))
-
-    bot1 = BetterNetBot_v3(model_v2, bot_name="BetterNet_1", evaluate=True)
-    bot2 = BetterNetBot_v3(model_v3, bot_name="BetterNet_2", evaluate=True)
+    bot1 = BetterNetBot_v3('./good_models/BetterNet_v3/', 'better_net_v3_2.pt', bot_name="BetterNet", evaluate=True)
+    #bot2 = BetterNetBot_v3('./good_models/BetterNet_v3/', 'better_net_v3_2.pt', bot_name="BetterNet_2", evaluate=True)
     #bot2 = RandomBot(bot_name="RandomBot")
 
     game = Game()
     game.register_bot(bot1)
-    game.register_bot(bot2)
+    #game.register_bot(bot2)
     game.run(
-        bot1.bot_name,
-        bot2.bot_name,
+        "BetterNet",
+        "Sakkirin",
         start_game_runner=True,
-        runs=256,
+        runs=64,
         threads=8,
         timeout=20,
     )
