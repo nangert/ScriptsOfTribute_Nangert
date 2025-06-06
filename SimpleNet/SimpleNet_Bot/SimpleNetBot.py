@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from typing import List
 
-from utils.game_state_to_vector import game_state_to_tensor_dict
+from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
 
 
 class NNBot(BaseAI):
@@ -30,7 +30,7 @@ class NNBot(BaseAI):
         """Choose a move based on the current game state."""
 
         # instead use your encoding here
-        obs = game_state_to_tensor_dict(game_state)
+        obs = game_state_to_tensor_dict_v1(game_state)
         x = torch.cat([
             obs["player_stats"].flatten(),
             obs["patron_tensor"].flatten(),

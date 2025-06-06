@@ -11,11 +11,13 @@ from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
 from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
+from BetterNet.BetterNN.BetterNet_v4 import BetterNetV4
 from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
+from utils.game_state_to_tensor.game_state_to_vector_v2 import game_state_to_tensor_dict_v2
 from utils.move_to_tensor import move_to_tensor, MOVE_FEAT_DIM
 
 
-class BetterNetBot_v3(BaseAI):
+class BetterNetBot_v4(BaseAI):
     """
     Bot that uses a neural network policy to select moves.
     Includes lstm-Layer.
@@ -31,7 +33,7 @@ class BetterNetBot_v3(BaseAI):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        model = BetterNetV3(hidden_dim=128, num_moves=10)
+        model = BetterNetV4(hidden_dim=128, num_moves=10)
         if model_path.exists():
             self._load_state(model, model_path, model_path.name)
         else:
@@ -91,7 +93,7 @@ class BetterNetBot_v3(BaseAI):
         """
 
         # 1) Convert state to tensors
-        obs = game_state_to_tensor_dict_v1(game_state)
+        obs = game_state_to_tensor_dict_v2(game_state)
 
         # each obs[k] is a 1D or 2D tensor for B=1, so add batch‐and‐time dims:
         obs = {k: v.unsqueeze(0) for k, v in obs.items()}

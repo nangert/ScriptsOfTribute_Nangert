@@ -17,6 +17,7 @@ MODEL_PREFIX = "better_net_v"
 
 # Games generated per GameRunner instance
 GAMES_PER_CYCLE = 64
+NUM_THREADS = 8
 
 # Directories for logging
 LOG_DIR = Path("logs")
@@ -68,7 +69,8 @@ def main() -> None:
             worker = RolloutWorker(
                 bot1_model_path=primary_model_path,
                 bot2_model_path=opponent_model_path,
-                num_games=GAMES_PER_CYCLE
+                num_games=GAMES_PER_CYCLE,
+                num_threads=NUM_THREADS
             )
             worker.run()
 

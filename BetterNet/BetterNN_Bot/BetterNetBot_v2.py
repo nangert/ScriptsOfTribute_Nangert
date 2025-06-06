@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
-from utils.game_state_to_vector import game_state_to_tensor_dict
+from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
 from utils.move_to_tensor import move_to_tensor, MOVE_FEAT_DIM
 
 
@@ -52,7 +52,7 @@ class BetterNetBot_v2(BaseAI):
             remaining_time: int,
     ) -> BasicMove:
         # Convert state to tensors
-        obs = game_state_to_tensor_dict(game_state)
+        obs = game_state_to_tensor_dict_v1(game_state)
         obs = {k: v.unsqueeze(0) for k, v in obs.items()}
 
         # Encode moves and pad/truncate to fixed max

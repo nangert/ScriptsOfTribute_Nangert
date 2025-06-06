@@ -9,7 +9,7 @@ from scripts_of_tribute.game import Game
 from RandomBot.RandomBot import RandomBot
 from SimpleNet.SimpleNN.SimpleNet import SimpleNet
 from SimpleNet.SimpleNet_Bot.SimpleNetBot import NNBot
-from utils.game_state_to_vector import game_state_to_tensor_dict
+from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
 
 
 def train_one_game(model, optimizer):
@@ -39,7 +39,7 @@ def train_one_game(model, optimizer):
     states = []
     actions = []
     for rec in bot1.move_history:
-        vec = game_state_to_tensor_dict(rec["game_state"])
+        vec = game_state_to_tensor_dict_v1(rec["game_state"])
         states.append(vec)
         actions.append(rec["chosen_move_idx"])
 

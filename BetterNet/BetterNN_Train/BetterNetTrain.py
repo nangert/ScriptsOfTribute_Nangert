@@ -10,7 +10,7 @@ from scripts_of_tribute.game import Game
 from BetterNet.BetterNN.BetterNet_v1 import BetterNet
 from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from RandomBot.RandomBot import RandomBot
-from utils.game_state_to_vector import game_state_to_tensor_dict
+from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -40,7 +40,7 @@ def train_one_game(model, optimizer, wandb_run, episode):
     states = []
     actions = []
     for rec in bot1.move_history:
-        states.append(game_state_to_tensor_dict(rec["game_state"]))
+        states.append(game_state_to_tensor_dict_v1(rec["game_state"]))
         actions.append(rec["chosen_move_idx"])
 
     # Process states

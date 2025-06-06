@@ -1,7 +1,7 @@
 ﻿import torch
 from scripts_of_tribute.move import BasicMove, SimpleCardMove, SimplePatronMove
 from scripts_of_tribute.enums import MoveEnum, PatronId
-from utils.game_state_to_vector import encode_card_tensor
+from utils.game_state_to_tensor.game_state_to_vector_v1 import encode_card_tensor
 from scripts_of_tribute.board import GameState
 
 # 7 different MoveTypes (e.g. Play_Card, Attack, End_Turn,...)

@@ -24,7 +24,7 @@ def encode_card_tensor(card: UniqueCard) -> torch.Tensor:
 
     return torch.cat([base_features, type_onehot], dim=0)
 
-def game_state_to_tensor_dict(gs: GameState) -> dict[str, torch.Tensor]:
+def game_state_to_tensor_dict_v1(gs: GameState) -> dict[str, torch.Tensor]:
     """
     Turns GameState into a tensor dictionary.
     Includes:
