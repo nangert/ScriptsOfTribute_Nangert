@@ -32,8 +32,9 @@ class BetterNetBot_v4(BaseAI):
     ):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        model = BetterNetV4(hidden_dim=128, num_moves=10)
+        model = BetterNetV4(hidden_dim=128, num_moves=10).to(self.device)
         if model_path.exists():
             self._load_state(model, model_path, model_path.name)
         else:
@@ -96,7 +97,7 @@ class BetterNetBot_v4(BaseAI):
         obs = game_state_to_tensor_dict_v2(game_state)
 
         # each obs[k] is a 1D or 2D tensor for B=1, so add batch‐and‐time dims:
-        obs = {k: v.unsqueeze(0) for k, v in obs.items()}
+        obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}
         #    → obs["player_stats"]:  [1, player_dim]
         #       obs["patron_tensor"]: [1, 10, 2]
         #       obs["tavern_tensor"]: [1, C, card_dim]
@@ -118,7 +119,7 @@ class BetterNetBot_v4(BaseAI):
             # otherwise add padding moves
             padding = [torch.zeros(move_dim) for _ in range(max_moves - len(move_tensors))]
             batch = move_tensors + padding
-        move_batch = torch.stack(batch, dim=0).unsqueeze(0)  # [1, max_moves, D]
+        move_batch = torch.stack(batch, dim=0).unsqueeze(0).to(self.device)  # [1, max_moves, D]
 
         # 3) Call the model, passing in current hidden state
         with torch.no_grad():
@@ -169,7 +170,8 @@ class BetterNetBot_v4(BaseAI):
         else:
             final_reward = -1.0
 
-        γ = 0.95
+        #γ = 0.99
+        γ = 1
         N = len(self.trajectory)
 
         for t, step in enumerate(self.trajectory):

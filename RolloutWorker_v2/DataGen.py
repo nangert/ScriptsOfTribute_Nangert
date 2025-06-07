@@ -74,6 +74,24 @@ def main() -> None:
             )
             worker.run()
 
+            '''
+            worker = RolloutWorker(
+                bot1_model_path=primary_model_path,
+                bot2_model_path=opponent_model_path,
+                num_games=int(GAMES_PER_CYCLE / 2),
+                num_threads=NUM_THREADS
+            )
+            worker.run()
+
+            worker = RolloutWorker(
+                bot1_model_path=primary_model_path,
+                bot2_model_path=opponent_model_path,
+                num_games=int(GAMES_PER_CYCLE / 2),
+                num_threads=NUM_THREADS
+            )
+            worker.run()
+            '''
+
             merge_replay_buffers(GAME_BUFFERS_DIR, MERGED_BUFFER_PATH)
 
             # Write generation summary log

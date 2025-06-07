@@ -92,6 +92,8 @@ def game_state_to_tensor_dict_v2(gs: GameState) -> dict[str, torch.Tensor]:
         "patron_tensor": patron_states_to_tensor(gs.patron_states),
         "tavern_available": cards_to_tensor_list(gs.tavern_available_cards),
         "tavern_cards": cards_to_tensor_list(gs.tavern_cards),
-        "start_of_turn_effects": encode_effects(gs.start_of_next_turn_effects),
-        "upcoming_effects": encode_effects(gs.upcoming_effects)
+        "hand": cards_to_tensor_list(cur.hand),
+        "draw_pile": cards_to_tensor_list(cur.draw_pile),
+        "played": cards_to_tensor_list(cur.played),
+        "opp_played": cards_to_tensor_list(opp.played),
     }

@@ -6,7 +6,6 @@ from BetterNet.BetterNN.ResidualMLP import ResidualMLP
 from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
 from utils.move_to_tensor import MOVE_FEAT_DIM
 
-
 class BetterNetV4(nn.Module):
     def __init__(self, hidden_dim: int = 128, num_moves: int = 10) -> None:
         super().__init__()
@@ -47,14 +46,10 @@ class BetterNetV4(nn.Module):
         )
         self.tavern_available_attention = TavernSelfAttention(hidden_dim, hidden_dim)
         self.tavern_cards_attention = TavernSelfAttention(hidden_dim, hidden_dim)
-        self.effect_encoder = nn.Sequential(
-            nn.Linear(self.effect_dim, hidden_dim),
-            nn.ReLU(),
-        )
 
         # Fusion & LSTM
         self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim * 6, hidden_dim),
+            nn.Linear(hidden_dim * 9, hidden_dim),
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
@@ -71,6 +66,10 @@ class BetterNetV4(nn.Module):
 
     def forward(self, obs: Dict[str, torch.Tensor], move_tensor: torch.Tensor,
                 hidden: Tuple[torch.Tensor, torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+
+        def mean_encode(field: str) -> torch.Tensor:
+            encoded = self.tavern_card_encoder(obs[field])
+            return encoded.mean(dim=-2, keepdim=True)
 
         if move_tensor.dim() == 4:
             B, T, N, D_move = move_tensor.shape
@@ -91,8 +90,10 @@ class BetterNetV4(nn.Module):
             tav_avail_attn = self.tavern_available_attention(tav_avail_enc).view(B, T, -1)
             tav_cards_attn = self.tavern_cards_attention(tav_cards_enc).view(B, T, -1)
 
-            start_effects = self.effect_encoder(obs["start_of_turn_effects"])
-            upcoming_effects = self.effect_encoder(obs["upcoming_effects"])
+            hand_enc = mean_encode("hand").view(B, T, -1)
+            draw_enc = mean_encode("draw_pile").view(B, T, -1)
+            played_enc = mean_encode("played").view(B, T, -1)
+            opp_played_enc = mean_encode("opp_played").view(B, T, -1)
 
             context = self.fusion(torch.cat([
                 cur_encoded,
@@ -100,7 +101,10 @@ class BetterNetV4(nn.Module):
                 patron_encoded,
                 tav_avail_attn,
                 tav_cards_attn,
-                start_effects + upcoming_effects,
+                hand_enc,
+                draw_enc,
+                played_enc,
+                opp_played_enc,
             ], dim=-1))
 
             lstm_out, _ = self.lstm(context)
@@ -117,15 +121,13 @@ class BetterNetV4(nn.Module):
             opp_encoded = self.enemy_player_encoder(maybe_unsqueeze(obs["enemy_player"]))
             patron_encoded = self.patron_encoder(obs["patron_tensor"].flatten(start_dim=-2).unsqueeze(1))
 
-            B1 = B * 1
-            tav_avail = obs["tavern_available"].view(B, -1, self.card_dim)
-            tav_cards = obs["tavern_cards"].view(B, -1, self.card_dim)
+            tav_avail_attn = self.tavern_available_attention(self.tavern_card_encoder(obs["tavern_available"])).view(B, 1, -1)
+            tav_cards_attn = self.tavern_cards_attention(self.tavern_card_encoder(obs["tavern_cards"])).view(B, 1, -1)
 
-            tav_avail_attn = self.tavern_available_attention(self.tavern_card_encoder(tav_avail)).view(B, 1, -1)
-            tav_cards_attn = self.tavern_cards_attention(self.tavern_card_encoder(tav_cards)).view(B, 1, -1)
-
-            start_effects = self.effect_encoder(maybe_unsqueeze(obs["start_of_turn_effects"]))
-            upcoming_effects = self.effect_encoder(maybe_unsqueeze(obs["upcoming_effects"]))
+            hand_enc = mean_encode("hand")
+            draw_enc = mean_encode("draw_pile")
+            played_enc = mean_encode("played")
+            opp_played_enc = mean_encode("opp_played")
 
             context = self.fusion(torch.cat([
                 cur_encoded,
@@ -133,7 +135,10 @@ class BetterNetV4(nn.Module):
                 patron_encoded,
                 tav_avail_attn,
                 tav_cards_attn,
-                start_effects + upcoming_effects,
+                hand_enc,
+                draw_enc,
+                played_enc,
+                opp_played_enc,
             ], dim=-1))
 
             lstm_out, new_hidden = self.lstm(context, hidden)

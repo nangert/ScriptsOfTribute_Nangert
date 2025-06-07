@@ -16,7 +16,7 @@ def main():
     primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
 
     bot1_path = Path('./good_models/BetterNet_v3/better_net_v3_3.pt')
-    bot2_path = Path('./good_models/BetterNet_v4/better_net_v4_2.pt')
+    bot2_path = Path('./good_models/BetterNet_v4/better_net_v22.pt')
 
     bot1 = BetterNetBot_v3(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
     bot2 = BetterNetBot_v4(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
@@ -29,7 +29,7 @@ def main():
         bot1.bot_name,
         bot2.bot_name,
         start_game_runner=True,
-        runs=64,
+        runs=256,
         threads=8,
         timeout=20,
     )
