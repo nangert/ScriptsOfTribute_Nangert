@@ -50,7 +50,7 @@ class BetterNetV5(nn.Module):
 
         # Fusion & LSTM
         self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim * 9, hidden_dim),
+            nn.Linear(hidden_dim * 10, hidden_dim),
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
@@ -90,10 +90,7 @@ class BetterNetV5(nn.Module):
                 obs["tavern_available_ids"].view(B_T, -1),
                 obs["tavern_available_feats"].view(B_T, -1, 3)
             )
-            tav_cards = self.card_embedding(
-                obs["tavern_cards_ids"].view(B_T, -1),
-                obs["tavern_cards_feats"].view(B_T, -1, 3)
-            )
+            tav_cards = self.card_embedding(obs["tavern_cards_ids"].view(B_T, -1), obs["tavern_cards_feats"].view(B_T, -1, 3))
             tav_avail_attn = self.tavern_available_attention(tav_avail).view(B, T, -1)
             tav_cards_attn = self.tavern_cards_attention(tav_cards).view(B, T, -1)
 
@@ -101,7 +98,8 @@ class BetterNetV5(nn.Module):
             hand_enc = embed_mean("hand").view(B, T, -1)
             draw_enc = embed_mean("draw_pile").view(B, T, -1)
             played_enc = embed_mean("played").view(B, T, -1)
-            opp_played_enc = embed_mean("opp_played").view(B, T, -1)
+            opp_cooldown_enc = embed_mean("opp_cooldown").view(B, T, -1)
+            opp_draw_enc = embed_mean("opp_draw_pile").view(B, T, -1)
 
             context = self.fusion(torch.cat([
                 cur_encoded,
@@ -112,7 +110,8 @@ class BetterNetV5(nn.Module):
                 hand_enc,
                 draw_enc,
                 played_enc,
-                opp_played_enc,
+                opp_cooldown_enc,
+                opp_draw_enc
             ], dim=-1))
 
             lstm_out, _ = self.lstm(context)
@@ -133,14 +132,13 @@ class BetterNetV5(nn.Module):
                 self.card_embedding(obs["tavern_available_ids"], obs["tavern_available_feats"])
             ).view(B, 1, -1)
 
-            tav_cards_attn = self.tavern_cards_attention(
-                self.card_embedding(obs["tavern_cards_ids"], obs["tavern_cards_feats"])
-            ).view(B, 1, -1)
+            tav_cards_attn = self.tavern_cards_attention(self.card_embedding(obs["tavern_cards_ids"], obs["tavern_cards_feats"])).view(B, 1, -1)
 
             hand_enc = embed_mean("hand")
             draw_enc = embed_mean("draw_pile")
             played_enc = embed_mean("played")
-            opp_played_enc = embed_mean("opp_played")
+            opp_cooldown_enc = embed_mean("opp_cooldown")
+            opp_draw_enc = embed_mean("opp_draw_pile")
 
             context = self.fusion(torch.cat([
                 cur_encoded,
@@ -151,7 +149,8 @@ class BetterNetV5(nn.Module):
                 hand_enc,
                 draw_enc,
                 played_enc,
-                opp_played_enc,
+                opp_cooldown_enc,
+                opp_draw_enc
             ], dim=-1))
 
             lstm_out, new_hidden = self.lstm(context, hidden)

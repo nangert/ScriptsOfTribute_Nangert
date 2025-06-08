@@ -104,6 +104,7 @@ def game_state_to_tensor_dict_v3(gs: GameState) -> dict[str, torch.Tensor | Tupl
     obs["hand_ids"], obs["hand_feats"] = cards_to_tensor_pair(cur.hand)
     obs["draw_pile_ids"], obs["draw_pile_feats"] = cards_to_tensor_pair(cur.draw_pile)
     obs["played_ids"], obs["played_feats"] = cards_to_tensor_pair(cur.played)
-    obs["opp_played_ids"], obs["opp_played_feats"] = cards_to_tensor_pair(opp.played)
+    obs["opp_cooldown_ids"], obs["opp_cooldown_feats"] = cards_to_tensor_pair(opp.cooldown_pile)
+    obs["opp_draw_pile_ids"], obs["opp_draw_pile_feats"] = cards_to_tensor_pair(opp.hand_and_draw)
 
     return obs
