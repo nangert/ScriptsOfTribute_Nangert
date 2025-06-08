@@ -9,6 +9,7 @@ from scripts_of_tribute.game import Game
 from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
 from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from BetterNet.BetterNN_Bot.BetterNetBot_v4 import BetterNetBot_v4
+from BetterNet.BetterNN_Bot.BetterNetBot_v5 import BetterNetBot_v5
 from RandomBot.RandomBot import RandomBot
 
 class RolloutWorker:
@@ -35,10 +36,10 @@ class RolloutWorker:
         self.logger.info("Starting %d games", self.num_games)
 
         # Instantiate bots, use RandomBot if bot2_model not available
-        bot1 = BetterNetBot_v4(self.bot1_model_path, bot_name="BetterNet")
+        bot1 = BetterNetBot_v5(self.bot1_model_path, bot_name="BetterNet")
         if self.bot2_model_path.exists():
             save_trajectory = True if self.bot1_model_path == self.bot2_model_path else False;
-            bot2 = BetterNetBot_v4(self.bot2_model_path, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
+            bot2 = BetterNetBot_v5(self.bot2_model_path, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
         else:
             bot2 = RandomBot(bot_name="RandomBot")
 

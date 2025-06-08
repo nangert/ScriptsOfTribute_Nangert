@@ -9,6 +9,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
 from BetterNet.BetterNN.BetterNet_v4 import BetterNetV4
+from BetterNet.BetterNN.BetterNet_v5 import BetterNetV5
 from utils.ReplayBuffer import ReplayBuffer
 
 # Device configuration
@@ -39,7 +40,7 @@ class Trainer:
         self.epochs = epochs
 
         # Initialize model
-        self.model = BetterNetV4(hidden_dim=128, num_moves=10).to(device)
+        self.model = BetterNetV5(hidden_dim=128, num_moves=10, num_cards=125).to(device)
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=device)
             self.model.load_state_dict(state)

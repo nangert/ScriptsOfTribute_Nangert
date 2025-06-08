@@ -41,7 +41,7 @@ class ReplayBuffer:
         """
 
         # Initialize datastructures for stored data of each episode
-        obs_keys = ["current_player", "enemy_player", "patron_tensor", "tavern_available", "tavern_cards", "hand", "draw_pile", "played", "opp_played"]
+        obs_keys = ["current_player", "enemy_player", "patron_tensor", "tavern_available_ids", "tavern_available_feats", "tavern_cards_ids", "tavern_cards_feats", "hand_ids", "hand_feats", "draw_pile_ids", "draw_pile_feats", "played_ids", "played_feats", "opp_played_ids", "opp_played_feats"]
         obs_unpadded: Dict[str, List[torch.Tensor]] = {k: [] for k in obs_keys}
         move_tensors_unpadded: List[torch.Tensor] = []
         actions_unpadded: List[torch.Tensor] = []
