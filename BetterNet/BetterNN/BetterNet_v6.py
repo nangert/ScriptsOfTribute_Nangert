@@ -77,6 +77,7 @@ class BetterNetV6(nn.Module):
                 hidden: Tuple[torch.Tensor, torch.Tensor] = None) -> Tuple[
         torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
 
+
         def embed_mean(field: str, B: int, T: int) -> torch.Tensor:
             ids = obs[f"{field}_ids"].view(B * T, -1)
             feats = obs[f"{field}_feats"].view(B * T, -1, 3)
@@ -101,11 +102,11 @@ class BetterNetV6(nn.Module):
                 self.card_embedding(obs["tavern_available_ids"], obs["tavern_available_feats"])
             ).view(B, 1, -1)
 
-            hand_enc = embed_mean("hand", B)
-            draw_enc = embed_mean("draw_pile", B)
-            played_enc = embed_mean("played", B)
-            opp_cooldown_enc = embed_mean("opp_cooldown", B)
-            opp_draw_enc = embed_mean("opp_draw_pile", B)
+            hand_enc = embed_mean("hand", B, 1)
+            draw_enc = embed_mean("draw_pile", B, 1)
+            played_enc = embed_mean("played", B, 1)
+            opp_cooldown_enc = embed_mean("opp_cooldown", B, 1)
+            opp_draw_enc = embed_mean("opp_draw_pile", B, 1)
 
             context = self.fusion(torch.cat([
                 cur_encoded,
