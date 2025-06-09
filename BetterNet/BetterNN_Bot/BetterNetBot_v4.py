@@ -10,11 +10,9 @@ from typing import List, Optional
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
-from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
 from BetterNet.BetterNN.BetterNet_v4 import BetterNetV4
-from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
 from utils.game_state_to_tensor.game_state_to_vector_v2 import game_state_to_tensor_dict_v2
-from utils.move_to_tensor import move_to_tensor, MOVE_FEAT_DIM
+from utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
 
 
 class BetterNetBot_v4(BaseAI):

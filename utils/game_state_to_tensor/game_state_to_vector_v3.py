@@ -31,7 +31,7 @@ def cards_to_tensor_pair(cards: List[UniqueCard]) -> Tuple[torch.Tensor, torch.T
         if c.name not in CARD_NAME_TO_ID:
             raise ValueError(f"Card name {c.name} not found in CARD_NAME_TO_ID")
 
-        type_id = CARD_NAME_TO_ID[c.name]  # Use canonical id for embedding
+        type_id = CARD_NAME_TO_ID[c.name]
         ids.append(type_id)
         scalars.append([
             c.cost,
@@ -100,7 +100,7 @@ def game_state_to_tensor_dict_v3(gs: GameState) -> dict[str, torch.Tensor | Tupl
 
     # Dynamic-length card lists (ID + scalar features)
     obs["tavern_available_ids"], obs["tavern_available_feats"] = cards_to_tensor_pair(gs.tavern_available_cards)
-    obs["tavern_cards_ids"], obs["tavern_cards_feats"] = cards_to_tensor_pair(gs.tavern_cards)
+    #obs["tavern_cards_ids"], obs["tavern_cards_feats"] = cards_to_tensor_pair(gs.tavern_cards)
     obs["hand_ids"], obs["hand_feats"] = cards_to_tensor_pair(cur.hand)
     obs["draw_pile_ids"], obs["draw_pile_feats"] = cards_to_tensor_pair(cur.draw_pile)
     obs["played_ids"], obs["played_feats"] = cards_to_tensor_pair(cur.played)

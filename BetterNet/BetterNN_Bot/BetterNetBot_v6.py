@@ -10,12 +10,11 @@ from typing import List, Optional
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
-from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
-from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
-from utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
+from BetterNet.BetterNN.BetterNet_v6 import BetterNetV6
+from utils.game_state_to_tensor.game_state_to_vector_v3 import game_state_to_tensor_dict_v3
+from utils.move_to_tensor.move_to_metadata import move_to_metadata
 
-
-class BetterNetBot_v3(BaseAI):
+class BetterNetBot_v6(BaseAI):
     """
     Bot that uses a neural network policy to select moves.
     Includes lstm-Layer.
@@ -30,8 +29,9 @@ class BetterNetBot_v3(BaseAI):
     ):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        model = BetterNetV3(hidden_dim=128, num_moves=10)
+        model = BetterNetV6(hidden_dim=128, num_moves=10, num_cards=125).to(self.device)
         if model_path.exists():
             self._load_state(model, model_path, model_path.name)
         else:
@@ -91,36 +91,37 @@ class BetterNetBot_v3(BaseAI):
         """
 
         # 1) Convert state to tensors
-        obs = game_state_to_tensor_dict_v1(game_state)
+        obs = game_state_to_tensor_dict_v3(game_state)
 
         # each obs[k] is a 1D or 2D tensor for B=1, so add batch‐and‐time dims:
-        obs = {k: v.unsqueeze(0) for k, v in obs.items()}
+        obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}
         #    → obs["player_stats"]:  [1, player_dim]
         #       obs["patron_tensor"]: [1, 10, 2]
         #       obs["tavern_tensor"]: [1, C, card_dim]
 
         # 2) Build move_batch = [1, N, D]
-        move_tensors = [move_to_tensor(m, game_state) for m in possible_moves]
+        move_metadata = [move_to_metadata(m, game_state) for m in possible_moves]
 
         # Max_moves -> amount of moves always get padded to 10
         # NN outputs always 10 probabilities
         # only first n moves are considered (n = len(possible_moves))
         max_moves = 10
-        # MOVE_FEAT_DIM comes from move_to_tensor in utils file
-        move_dim = MOVE_FEAT_DIM
 
         # if amount of possible moves is > 10 then truncate possible moves (end_turn is always last move)
-        if len(move_tensors) >= max_moves:
-            batch = move_tensors[:max_moves]
+        if len(move_metadata) >= max_moves:
+            move_metas_padded = move_metadata[:max_moves]
         else:
-            # otherwise add padding moves
-            padding = [torch.zeros(move_dim) for _ in range(max_moves - len(move_tensors))]
-            batch = move_tensors + padding
-        move_batch = torch.stack(batch, dim=0).unsqueeze(0)  # [1, max_moves, D]
+            pad_meta = {
+                "move_type": None,
+                "card_id": None,
+                "patron_id": None,
+                "effect_vec": None
+            }
+            move_metas_padded = move_metadata + [pad_meta] * (max_moves - len(move_metadata))
 
         # 3) Call the model, passing in current hidden state
         with torch.no_grad():
-            logits, value, new_hidden = self.model(obs, move_batch, self.hidden)
+            logits, value, new_hidden = self.model(obs, move_metas_padded, self.hidden)
             #   logits: [1, max_moves], value: [1], new_hidden: LSTM state (h, c)
 
         # 4) Save the new LSTM state for next step
@@ -145,7 +146,7 @@ class BetterNetBot_v3(BaseAI):
         # 6) Save sample in episode / trajectory, discounted reward set at end of episode
         self.trajectory.append({
             "state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
-            "move_tensor": move_batch.squeeze(0).cpu(),
+            "move_tensor": move_metadata,
             "action_idx": idx,
             "reward": None,
             "old_log_prob": float(np.log(probs[idx] + 1e-8)),
@@ -167,7 +168,8 @@ class BetterNetBot_v3(BaseAI):
         else:
             final_reward = -1.0
 
-        γ = 0.95
+        γ = 0.99
+        #γ = 1
         N = len(self.trajectory)
 
         for t, step in enumerate(self.trajectory):

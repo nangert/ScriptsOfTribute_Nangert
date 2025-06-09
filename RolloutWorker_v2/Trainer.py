@@ -10,6 +10,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
 from BetterNet.BetterNN.BetterNet_v4 import BetterNetV4
 from BetterNet.BetterNN.BetterNet_v5 import BetterNetV5
+from BetterNet.BetterNN.BetterNet_v6 import BetterNetV6
 from utils.ReplayBuffer import ReplayBuffer
 
 # Device configuration
@@ -40,7 +41,7 @@ class Trainer:
         self.epochs = epochs
 
         # Initialize model
-        self.model = BetterNetV5(hidden_dim=128, num_moves=10, num_cards=125).to(device)
+        self.model = BetterNetV6(hidden_dim=128, num_moves=10, num_cards=125).to(device)
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=device)
             self.model.load_state_dict(state)
@@ -62,16 +63,14 @@ class Trainer:
             value_coeff: float = 0.5,
             entropy_coeff: float = 0.01,
     ):
-        # 1) Load one batch of B episodes (e.g. B=128) from the buffer
         obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
             self.buffer.get_all()
         B, T = actions_all.shape
-        self.logger.info("Training on %d episodes, each padded to length %d, %d PPO epochs",
-                         B, T, self.epochs)
+        self.logger.info("Training on %d episodes, each padded to length %d, %d PPO epochs", B, T, self.epochs)
 
         device = next(self.model.parameters()).device
-        lengths_all = lengths_all.to(device)  # [B]
-        mask_all = (torch.arange(T, device=device).unsqueeze(0) < lengths_all.unsqueeze(1)).float()  # [B, T]
+        lengths_all = lengths_all.to(device)
+        mask_all = (torch.arange(T, device=device).unsqueeze(0) < lengths_all.unsqueeze(1)).float()
 
         step = 0
         for epoch in range(1, self.epochs + 1):
@@ -79,85 +78,80 @@ class Trainer:
 
             for start in range(0, B, batch_size):
                 batch_inds = perm[start: start + batch_size]
-                # Move to GPU *before* indexing
-                obs_batch = {k: v.to(device)[batch_inds] for k, v in obs_all.items()}  # [B', T, …]
-                actions_batch = actions_all.to(device)[batch_inds]  # [B', T]
-                returns_batch = returns_all.to(device)[batch_inds]  # [B', T]
-                moves_batch = moves_all.to(device)[batch_inds]  # [B', T, N, D]
-                oldlp_batch = old_lp_all.to(device)[batch_inds]  # [B', T]
-                oldval_batch = old_val_all.to(device)[batch_inds]  # [B', T]
-                lengths_batch = lengths_all[batch_inds]  # [B']
-                mask_batch = mask_all[batch_inds]  # [B', T]
+
+                obs_batch = {k: v.to(device)[batch_inds] for k, v in obs_all.items()}
+                actions_batch = actions_all.to(device)[batch_inds]
+                returns_batch = returns_all.to(device)[batch_inds]
+                oldlp_batch = old_lp_all.to(device)[batch_inds]
+                oldval_batch = old_val_all.to(device)[batch_inds]
+                lengths_batch = lengths_all[batch_inds]
+                mask_batch = mask_all[batch_inds]
 
                 Bp = actions_batch.size(0)
 
-                # 2) Forward: get LSTM outputs and value predictions
-                lstm_out, values = self.model(obs_batch, moves_batch)
-                #   lstm_out: [B', T, 256]
-                #   values:   [B', T]
-
-                # 3) Compute policy logits *for all timesteps*:
-                # 3a) Project LSTM hidden [256 → 128] at every t
+                lstm_out, values = self.model(obs_batch, None)
                 final_hidden_all = self.model.policy_proj(lstm_out)  # [B', T, 128]
 
-                # 3b) Encode all moves: flatten (B'*T, N, D) → embed → reshape to [B', T, N, 128]
+                move_meta_batch = [moves_all[i] for i in batch_inds.tolist()]
+                move_emb_nested = []
+                for episode in move_meta_batch:
+                    step_embs_list = []
+                    for step_meta in episode:
+                        step_embs = [self.model._embed_move_meta(m, device).squeeze(0) for m in step_meta]
+                        step_tensor = torch.stack(step_embs)
+                        step_tensor = torch.nn.functional.pad(step_tensor, (0, 0, 0, 10 - step_tensor.size(0)))
+                        step_embs_list.append(step_tensor)
+                    move_emb_nested.append(torch.stack(step_embs_list))
+
+                max_T = max(m.size(0) for m in move_emb_nested)
+                move_emb_padded = torch.stack([
+                    torch.nn.functional.pad(m, (0, 0, 0, 0, 0, max_T - m.size(0))) for m in move_emb_nested
+                ]).to(device)  # [B, T, 10, D]
+
                 Bt = Bp * T
-                N = moves_batch.size(2)
-                Dm = moves_batch.size(3)
-                move_flat = moves_batch.view(Bt, N, Dm)  # [B'*T, N, Dm]
-                move_emb_flat = self.model.move_encoder(move_flat)  # [B'*T, N, 128]
-                move_emb_all = move_emb_flat.view(Bp, T, N, -1)  # [B', T, N, 128]
+                H_flat = final_hidden_all.view(Bt, -1).unsqueeze(2)  # [B*T, 128, 1]
+                M_flat = move_emb_padded.view(Bt, 10, -1)
+                logits_flat = torch.bmm(M_flat, H_flat).squeeze(2)
+                logits_all = logits_flat.view(Bp, T, 10)
 
-                # 3c) For each (b,t), dot move_emb_all[b,t] (N×128) with final_hidden_all[b,t] (128)
-                # Flatten to do one big batched matmul:
-                H_flat = final_hidden_all.view(Bt, 128).unsqueeze(2)  # [B'*T, 128, 1]
-                M_flat = move_emb_all.view(Bt, N, 128)  # [B'*T, N, 128]
-                logits_flat = torch.bmm(M_flat, H_flat).squeeze(2)  # [B'*T, N]
-                logits_all = logits_flat.view(Bp, T, N)  # [B', T, N]
+                # Masked log_prob computation
+                mask_flat = mask_batch.view(-1)  # [B*T]
+                acts_flat = actions_batch.view(-1)
+                valid_mask = mask_flat == 1
+                logits_valid = logits_all.view(-1, 10)[valid_mask]
+                acts_valid = acts_flat[valid_mask]
 
-                # 4) Build distributions & gather log‐probs for the *actions that were taken*:
-                dist_all = torch.distributions.Categorical(logits=logits_all.view(-1, N))  # [B'*T, N]
-                acts_flat = actions_batch.view(-1)  # [B'*T]
-                logp_flat = dist_all.log_prob(acts_flat)  # [B'*T]
+                dist_valid = torch.distributions.Categorical(logits=logits_valid)
+                logp_valid = dist_valid.log_prob(acts_valid)
 
-                # 5) Compute “old” log‐probs (from buffer) and advantage, for all (b,t):
-                oldlp_flat = oldlp_batch.view(-1)  # [B'*T]
-                ret_flat = returns_batch.view(-1)  # [B'*T]
-                val_flat = values.view(-1)  # [B'*T]
-                adv_flat = ret_flat - val_flat  # [B'*T]
+                logp_flat = torch.zeros_like(acts_flat, dtype=torch.float)
+                logp_flat[valid_mask] = logp_valid
 
-                # 6) Mask out padded timesteps:
-                mask_flat = mask_batch.view(-1)  # [B'*T] of 0/1
-                logp_flat = logp_flat * mask_flat
-                oldlp_flat = oldlp_flat * mask_flat
-                adv_flat = adv_flat * mask_flat
+                oldlp_flat = oldlp_batch.view(-1)
+                ret_flat = returns_batch.view(-1)
+                val_flat = values.view(-1)
+                adv_flat = ret_flat - val_flat
 
-                # 7) Normalize advantages over all valid (b,t):
+                logp_flat *= mask_flat
+                oldlp_flat *= mask_flat
+                adv_flat *= mask_flat
+
                 adv_mean = adv_flat.sum() / mask_flat.sum()
-                adv_var = ((adv_flat - adv_mean).pow(2) * mask_flat).sum() / mask_flat.sum()
-                adv_std = torch.sqrt(adv_var + 1e-8)
-                adv_norm = (adv_flat - adv_mean) / adv_std  # [B'*T]
+                adv_std = ((adv_flat - adv_mean).pow(2) * mask_flat).sum() / mask_flat.sum()
+                adv_norm = (adv_flat - adv_mean) / (adv_std + 1e-8)
 
-                # 8) PPO ratio and clipped objective (all (b,t)):
-                ratio_flat = torch.exp(logp_flat - oldlp_flat)  # [B'*T]
+                ratio_flat = torch.exp(logp_flat - oldlp_flat)
                 clipped_flat = torch.clamp(ratio_flat, 1 - clip_eps, 1 + clip_eps)
-                pol_loss_flat = -torch.min(ratio_flat * adv_norm, clipped_flat * adv_norm)  # [B'*T]
-
+                pol_loss_flat = -torch.min(ratio_flat * adv_norm, clipped_flat * adv_norm)
                 pol_loss = (pol_loss_flat * mask_flat).sum() / mask_flat.sum()
 
-                # 9) Value loss (MSE over all valid (b,t)):
-                mse_all = (val_flat - ret_flat).pow(2)  # [B'*T]
-                value_loss = (mse_all * mask_flat).sum() / mask_flat.sum()
+                value_loss = ((val_flat - ret_flat).pow(2) * mask_flat).sum() / mask_flat.sum()
 
-                # 10) Entropy bonus (over all valid (b,t)):
-                entropy_flat = dist_all.entropy()  # [B'*T]
-                ent = (entropy_flat * mask_flat).sum() / mask_flat.sum()
+                entropy_flat = dist_valid.entropy()
+                ent = entropy_flat.sum() / mask_flat.sum()
 
-                # 11) Total loss and backward
                 total_loss = pol_loss + value_coeff * value_loss - entropy_coeff * ent
                 total_loss.backward()
-
-                # 12) Gradient clipping + step
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
                 self.scheduler.step()
@@ -179,7 +173,6 @@ class Trainer:
                 epoch, self.epochs, total_loss.item(), pol_loss.item(), value_loss.item(), ent.item()
             )
 
-        # After all epochs on this batch:
         self._save_model()
         self.buffer.archive_buffer()
 

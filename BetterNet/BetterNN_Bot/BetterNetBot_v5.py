@@ -12,7 +12,7 @@ from scripts_of_tribute.board import EndGameState
 
 from BetterNet.BetterNN.BetterNet_v5 import BetterNetV5
 from utils.game_state_to_tensor.game_state_to_vector_v3 import game_state_to_tensor_dict_v3
-from utils.move_to_tensor import move_to_tensor, MOVE_FEAT_DIM
+from utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
 
 
 class BetterNetBot_v5(BaseAI):
@@ -168,8 +168,8 @@ class BetterNetBot_v5(BaseAI):
         else:
             final_reward = -1.0
 
-        #γ = 0.99
-        γ = 1
+        γ = 0.99
+        #γ = 1
         N = len(self.trajectory)
 
         for t, step in enumerate(self.trajectory):
