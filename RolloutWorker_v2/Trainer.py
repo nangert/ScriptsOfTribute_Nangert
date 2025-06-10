@@ -103,7 +103,7 @@ class Trainer:
                         step_embs_list.append(step_tensor)
                     move_emb_nested.append(torch.stack(step_embs_list))
 
-                max_T = max(m.size(0) for m in move_emb_nested)
+                max_T = T
                 move_emb_padded = torch.stack([
                     torch.nn.functional.pad(m, (0, 0, 0, 0, 0, max_T - m.size(0))) for m in move_emb_nested
                 ]).to(device)  # [B, T, 10, D]
@@ -175,6 +175,7 @@ class Trainer:
 
         self._save_model()
         self.buffer.archive_buffer()
+
 
     def _save_model(self) -> None:
         """

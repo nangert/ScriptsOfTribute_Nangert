@@ -81,6 +81,10 @@ class BetterNetV6(nn.Module):
         def embed_mean(field: str, B: int, T: int) -> torch.Tensor:
             ids = obs[f"{field}_ids"].view(B * T, -1)
             feats = obs[f"{field}_feats"].view(B * T, -1, 3)
+
+            if ids.size(1) == 0:
+                return torch.zeros(B, T, 128, device=ids.device)
+
             embedded = self.card_embedding(ids, feats).mean(dim=1)  # [B*T, D]
             return embedded.view(B, T, -1)  # [B, T, D]
 
