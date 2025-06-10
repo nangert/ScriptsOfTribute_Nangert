@@ -1,8 +1,9 @@
 ﻿import logging
+import random
 from datetime import datetime
 from pathlib import Path
 
-from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v6 import RolloutWorker
+from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v3 import RolloutWorker_v3
 from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path, get_model_version_path
 
@@ -16,7 +17,6 @@ MODEL_PREFIX = "better_net_v"
 
 # Games generated per GameRunner instance
 GAMES_PER_CYCLE = 64
-NUM_THREADS = 8
 
 # Directories for logging
 LOG_DIR = Path("logs")
@@ -33,31 +33,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger("DataGeneration")
 
-import random
+def select_opponent_model() -> Path | None:
+    """
+    Returns one last 3 models with equal probability
+    Todo: Adapt for OSFP later
+    """
+    candidates = [
+        get_model_version_path(MODEL_DIR, MODEL_PREFIX, offset=i)
+        for i in range(1, 4)
+    ]
+    candidates = [c for c in candidates if c is not None]
 
-OSFP_LATEST_PROB = 0.3
-HISTORY_DEPTH = 10  # number of past versions to consider
-
-def select_osfp_opponent() -> Path | None:
-    latest = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-    if latest is None:
+    if not candidates:
         return None
 
-    # Collect historical checkpoints beyond the latest
-    history = [
-        get_model_version_path(MODEL_DIR, MODEL_PREFIX, offset=i)
-        for i in range(2, HISTORY_DEPTH + 1)
-    ]
-    history = [h for h in history if h is not None]
-
-    if random.random() < OSFP_LATEST_PROB:
-        return latest
-    elif history:
-        return random.choice(history)
-    else:
-        # Fallback to latest if no history exists
-        return latest
-
+    return random.choice(candidates)
 
 
 def main() -> None:
@@ -69,15 +59,16 @@ def main() -> None:
     while True:
         try:
             primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_osfp_opponent()
+            opponent_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            #opponent_model_path = select_opponent_model()
+
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
-            worker = RolloutWorker(
+            worker = RolloutWorker_v3(
                 bot1_model_path=primary_model_path,
                 bot2_model_path=opponent_model_path,
-                num_games=GAMES_PER_CYCLE,
-                num_threads=NUM_THREADS
+                num_games=GAMES_PER_CYCLE
             )
             worker.run()
 

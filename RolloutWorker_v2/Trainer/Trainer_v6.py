@@ -17,7 +17,7 @@ from utils.ReplayBuffer import ReplayBuffer
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class Trainer:
+class Trainer_v6:
     """
     Handles model loading, training over replay buffer, and saving.
     """

@@ -13,7 +13,7 @@ from BetterNet.BetterNN_Bot.BetterNetBot_v5 import BetterNetBot_v5
 from BetterNet.BetterNN_Bot.BetterNetBot_v6 import BetterNetBot_v6
 from RandomBot.RandomBot import RandomBot
 
-class RolloutWorker:
+class RolloutWorker_v6:
     """
     Rollout worker for loading models from file_paths and running GameRunner with loaded models
     bot2_model_path is optional, if None then selects RandomBot instead of NN-model

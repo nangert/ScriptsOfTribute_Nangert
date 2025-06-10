@@ -2,7 +2,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v6 import RolloutWorker
+from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v6 import RolloutWorker_v6
 from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path, get_model_version_path
 
@@ -73,7 +73,7 @@ def main() -> None:
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
-            worker = RolloutWorker(
+            worker = RolloutWorker_v6(
                 bot1_model_path=primary_model_path,
                 bot2_model_path=opponent_model_path,
                 num_games=GAMES_PER_CYCLE,

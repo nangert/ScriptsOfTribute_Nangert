@@ -8,7 +8,7 @@ import re
 import torch
 import wandb
 
-from RolloutWorker_v2.Trainer.Trainer_v6 import Trainer
+from RolloutWorker_v2.Trainer.Trainer_v6 import Trainer_v6
 from utils.model_versioning import get_latest_model_path
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -73,7 +73,7 @@ def main():
             model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             logger.info("Starting training with model: %s", model_path)
 
-            trainer = Trainer(
+            trainer = Trainer_v6(
                 model_path=model_path,
                 buffer_path=buffer_file,
                 save_path=SAVE_MODEL_PATH,
