@@ -7,7 +7,7 @@ import torch
 from typing import List, Dict
 import shutil
 
-class ReplayBuffer:
+class ReplayBuffer_v6:
     """
     Loads and prepares training data.
     """

@@ -5,13 +5,9 @@ from typing import Optional
 import torch
 import torch.optim as optim
 import wandb
-from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
-from BetterNet.BetterNN.BetterNet_v4 import BetterNetV4
-from BetterNet.BetterNN.BetterNet_v5 import BetterNetV5
 from BetterNet.BetterNN.BetterNet_v6 import BetterNetV6
-from utils.ReplayBuffer import ReplayBuffer
+from ReplayBuffer.ReplayBuffer_v6 import ReplayBuffer_v6
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -54,7 +50,7 @@ class Trainer_v6:
         #self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs * 2)
 
         # Replay buffer
-        self.buffer = ReplayBuffer(self.buffer_path)
+        self.buffer = ReplayBuffer_v6(self.buffer_path)
 
     def train(
             self,
