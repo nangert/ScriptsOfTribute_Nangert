@@ -51,7 +51,7 @@ class Trainer:
 
         # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs * 2)
+        #self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs * 2)
 
         # Replay buffer
         self.buffer = ReplayBuffer(self.buffer_path)
@@ -59,9 +59,9 @@ class Trainer:
     def train(
             self,
             batch_size: int = 64,
-            clip_eps: float = 0.2,
-            value_coeff: float = 0.5,
-            entropy_coeff: float = 0.01,
+            clip_eps: float = 0.3,
+            value_coeff: float = 0.3,
+            entropy_coeff: float = 0.05,
     ):
         obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
             self.buffer.get_all()
@@ -154,7 +154,7 @@ class Trainer:
                 total_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
-                self.scheduler.step()
+                #self.scheduler.step()
                 self.optimizer.zero_grad()
 
                 if self.wandb_run:

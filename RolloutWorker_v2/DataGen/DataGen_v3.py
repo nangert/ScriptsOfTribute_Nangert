@@ -1,9 +1,8 @@
 ﻿import logging
-import random
 from datetime import datetime
 from pathlib import Path
 
-from RolloutWorker_v2.RolloutWorker import RolloutWorker
+from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v6 import RolloutWorker
 from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path, get_model_version_path
 
@@ -34,21 +33,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger("DataGeneration")
 
-def select_opponent_model() -> Path | None:
-    """
-    Returns one last 3 models with equal probability
-    Todo: Adapt for OSFP later
-    """
-    candidates = [
-        get_model_version_path(MODEL_DIR, MODEL_PREFIX, offset=i)
-        for i in range(1, 4)
-    ]
-    candidates = [c for c in candidates if c is not None]
+import random
 
-    if not candidates:
+OSFP_LATEST_PROB = 0.3
+HISTORY_DEPTH = 10  # number of past versions to consider
+
+def select_osfp_opponent() -> Path | None:
+    latest = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+    if latest is None:
         return None
 
-    return random.choice(candidates)
+    # Collect historical checkpoints beyond the latest
+    history = [
+        get_model_version_path(MODEL_DIR, MODEL_PREFIX, offset=i)
+        for i in range(2, HISTORY_DEPTH + 1)
+    ]
+    history = [h for h in history if h is not None]
+
+    if random.random() < OSFP_LATEST_PROB:
+        return latest
+    elif history:
+        return random.choice(history)
+    else:
+        # Fallback to latest if no history exists
+        return latest
+
 
 
 def main() -> None:
@@ -60,9 +69,7 @@ def main() -> None:
     while True:
         try:
             primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            #opponent_model_path = select_opponent_model()
-
+            opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
@@ -73,24 +80,6 @@ def main() -> None:
                 num_threads=NUM_THREADS
             )
             worker.run()
-
-            '''
-            worker = RolloutWorker(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
-                num_games=int(GAMES_PER_CYCLE / 2),
-                num_threads=NUM_THREADS
-            )
-            worker.run()
-
-            worker = RolloutWorker(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
-                num_games=int(GAMES_PER_CYCLE / 2),
-                num_threads=NUM_THREADS
-            )
-            worker.run()
-            '''
 
             merge_replay_buffers(GAME_BUFFERS_DIR, MERGED_BUFFER_PATH)
 

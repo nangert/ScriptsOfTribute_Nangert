@@ -38,7 +38,7 @@ class RolloutWorker:
 
         # Instantiate bots, use RandomBot if bot2_model not available
         bot1 = BetterNetBot_v6(self.bot1_model_path, bot_name="BetterNet")
-        if self.bot2_model_path.exists():
+        if self.bot2_model_path and self.bot2_model_path.exists():
             save_trajectory = True if self.bot1_model_path == self.bot2_model_path else False;
             bot2 = BetterNetBot_v6(self.bot2_model_path, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
         else:

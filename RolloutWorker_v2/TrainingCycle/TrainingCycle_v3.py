@@ -8,8 +8,7 @@ import re
 import torch
 import wandb
 
-from RolloutWorker_v2.Trainer import Trainer
-from utils.merge_replay_buffers import merge_replay_buffers
+from RolloutWorker_v2.Trainer.Trainer_v6 import Trainer
 from utils.model_versioning import get_latest_model_path
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -22,10 +21,10 @@ GAME_BUFFERS_DIR = Path("game_buffers")
 MERGED_BUFFER_DIR = Path("saved_buffers")
 
 GAMES_PER_CYCLE = 128
-EPOCHS_PER_CYCLE = 5
-BATCH_SIZE = 64
-LEARNING_RATE = 1e-5
-SLEEP_IF_NO_DATA = 60
+EPOCHS_PER_CYCLE = 2
+BATCH_SIZE = 32
+LEARNING_RATE = 1e-4
+SLEEP_IF_NO_DATA = 30
 
 def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_buffer"):
     pattern = re.compile(rf"{base_filename}_(\d+)\.pkl")
