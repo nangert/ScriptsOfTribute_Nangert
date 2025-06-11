@@ -9,13 +9,12 @@ import torch
 import wandb
 
 from RolloutWorker_v2.Trainer.Trainer_v3 import Trainer_v3
-from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 MODEL_DIR = Path("saved_models")
-MODEL_PREFIX = "better_net_v"
+MODEL_PREFIX = "better_net_v3_"
 SAVE_MODEL_PATH = MODEL_DIR
 
 GAME_BUFFERS_DIR = Path("game_buffers")
@@ -27,7 +26,7 @@ BATCH_SIZE = 32
 LEARNING_RATE = 3e-5
 SLEEP_IF_NO_DATA = 60
 
-def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_buffer"):
+def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_buffer_v3"):
     pattern = re.compile(rf"{base_filename}_(\d+)\.pkl")
     buffers = [
         (int(m.group(1)), file)

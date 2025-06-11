@@ -179,7 +179,7 @@ class Trainer_v6:
         """
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
         model_dir = self.save_path
-        model_prefix = "better_net_v"
+        model_prefix = "better_net_v6_"
         extension = ".pt"
 
         # Find all existing model files

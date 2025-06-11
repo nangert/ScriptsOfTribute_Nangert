@@ -13,7 +13,7 @@ MERGED_BUFFER_PATH = Path("saved_buffers")
 
 # Directory for loading current model
 MODEL_DIR = Path("saved_models")
-MODEL_PREFIX = "better_net_v"
+MODEL_PREFIX = "better_net_v3_"
 
 # Games generated per GameRunner instance
 GAMES_PER_CYCLE = 64
@@ -72,7 +72,7 @@ def main() -> None:
             )
             worker.run()
 
-            merge_replay_buffers(GAME_BUFFERS_DIR, MERGED_BUFFER_PATH)
+            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename='BetterNet_v3_buffer')
 
             # Write generation summary log
             with open(LOG_DIR / "generation_summary.log", "a") as f:

@@ -184,7 +184,7 @@ class BetterNetBot_v3(BaseAI):
         """
         buffer_dir = Path("game_buffers")
         buffer_dir.mkdir(parents=True, exist_ok=True)
-        filename = buffer_dir / f"{self.bot_name}_buffer_{uuid.uuid4().hex}.pkl"
+        filename = buffer_dir / f"{self.bot_name}_v3_buffer_{uuid.uuid4().hex}.pkl"
         with open(filename, "wb") as f:
             pickle.dump(self.trajectory, f)
             f.flush()
