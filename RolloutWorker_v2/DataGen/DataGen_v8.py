@@ -3,7 +3,7 @@ import random
 from datetime import datetime
 from pathlib import Path
 
-from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v7 import RolloutWorker_v7
+from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v8 import RolloutWorker_v8
 from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path, get_model_version_path
 
@@ -13,11 +13,11 @@ MERGED_BUFFER_PATH = Path("saved_buffers")
 
 # Directory for loading current model
 MODEL_DIR = Path("saved_models")
-MODEL_PREFIX = "better_net_v7_"
-REPLAY_BUFFER_BASENAME = 'BetterNet_v7_buffer'
+MODEL_PREFIX = "better_net_v8_"
+REPLAY_BUFFER_BASENAME = 'BetterNet_v8_buffer'
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 128
 THREADS = 8
 
 # Directories for logging
@@ -35,9 +35,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("DataGeneration")
 
-
-OSFP_LATEST_PROB = 0.3
-HISTORY_DEPTH = 10
+OSFP_LATEST_PROB = 0.0
+HISTORY_DEPTH = 5
 
 def select_osfp_opponent() -> Path | None:
     latest = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
@@ -60,7 +59,6 @@ def select_osfp_opponent() -> Path | None:
         return latest
 
 
-
 def main() -> None:
     """
     Starts loop to generate games
@@ -70,14 +68,39 @@ def main() -> None:
     while True:
         try:
             primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            logger.info(f"Primary Model: {primary_model_path}")
+            logger.info(f"Opponent Model: {primary_model_path}")
+
+            worker = RolloutWorker_v8(
+                bot1_model_path=primary_model_path,
+                bot2_model_path=primary_model_path,
+                num_games=GAMES_PER_CYCLE,
+                num_threads=THREADS
+            )
+            worker.run()
+
+
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
-            worker = RolloutWorker_v7(
+            worker = RolloutWorker_v8(
                 bot1_model_path=primary_model_path,
                 bot2_model_path=opponent_model_path,
-                num_games=GAMES_PER_CYCLE,
+                num_games=int(GAMES_PER_CYCLE / 2),
+                num_threads=THREADS
+            )
+            worker.run()
+
+
+            opponent_model_path = select_osfp_opponent()
+            logger.info(f"Primary Model: {primary_model_path}")
+            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
+
+            worker = RolloutWorker_v8(
+                bot1_model_path=primary_model_path,
+                bot2_model_path=opponent_model_path,
+                num_games=int(GAMES_PER_CYCLE / 2),
                 num_threads=THREADS
             )
             worker.run()

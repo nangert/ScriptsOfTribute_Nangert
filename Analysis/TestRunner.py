@@ -10,6 +10,7 @@ from BetterNet.BetterNN_Bot.BetterNetBot_v4 import BetterNetBot_v4
 from BetterNet.BetterNN_Bot.BetterNetBot_v5 import BetterNetBot_v5
 from BetterNet.BetterNN_Bot.BetterNetBot_v6 import BetterNetBot_v6
 from BetterNet.BetterNN_Bot.BetterNetBot_v7 import BetterNetBot_v7
+from BetterNet.BetterNN_Bot.BetterNetBot_v8 import BetterNetBot_v8
 from RandomBot.RandomBot import RandomBot
 from utils.model_versioning import get_latest_model_path
 
@@ -19,21 +20,22 @@ MODEL_PREFIX = "better_net_v"
 def main():
     primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
 
-    bot1_path = Path('./good_models/BetterNet_v3/better_net_v12.pt')
-    bot2_path = Path('./good_models/BetterNet_v7/better_net_v7_20.pt')
+    bot1_path = Path('./good_models/BetterNet_v8/better_net_v8_18_2.pt')
+    bot2_path = Path('./good_models/BetterNet_v8/better_net_v8_24.pt')
 
-    bot1 = BetterNetBot_v3(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
-    bot2 = BetterNetBot_v7(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
+    bot1 = BetterNetBot_v8(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
+    bot2 = BetterNetBot_v8(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
     #bot1 = RandomBot(bot_name="RandomBot")
 
     game = Game()
     game.register_bot(bot1)
     game.register_bot(bot2)
     game.run(
+        #"Sakkirin",
         bot1.bot_name,
         bot2.bot_name,
         start_game_runner=True,
-        runs=128,
+        runs=512,
         threads=8,
         timeout=9999,
     )
