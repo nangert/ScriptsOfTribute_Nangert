@@ -9,6 +9,7 @@ from BetterNet.BetterNN.BetterNet_v2 import BetterNetV2
 from BetterNet.BetterNN_Bot.BetterNetBot_v4 import BetterNetBot_v4
 from BetterNet.BetterNN_Bot.BetterNetBot_v5 import BetterNetBot_v5
 from BetterNet.BetterNN_Bot.BetterNetBot_v6 import BetterNetBot_v6
+from BetterNet.BetterNN_Bot.BetterNetBot_v7 import BetterNetBot_v7
 from RandomBot.RandomBot import RandomBot
 from utils.model_versioning import get_latest_model_path
 
@@ -19,10 +20,10 @@ def main():
     primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
 
     bot1_path = Path('./good_models/BetterNet_v3/better_net_v12.pt')
-    bot2_path = Path('./good_models/BetterNet_v6/better_net_v37.pt')
+    bot2_path = Path('./good_models/BetterNet_v7/better_net_v7_20.pt')
 
     bot1 = BetterNetBot_v3(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
-    bot2 = BetterNetBot_v6(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
+    bot2 = BetterNetBot_v7(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
     #bot1 = RandomBot(bot_name="RandomBot")
 
     game = Game()
@@ -34,7 +35,7 @@ def main():
         start_game_runner=True,
         runs=128,
         threads=8,
-        timeout=20,
+        timeout=9999,
     )
 
 if __name__ == "__main__":

@@ -3,14 +3,12 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-import torch
 from scripts_of_tribute.game import Game
 
-from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
-from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
+from BetterNet.BetterNN_Bot.BetterNetBot_v7 import BetterNetBot_v7
 from RandomBot.RandomBot import RandomBot
 
-class RolloutWorker_v3:
+class RolloutWorker_v7:
     """
     Rollout worker for loading models from file_paths and running GameRunner with loaded models
     bot2_model_path is optional, if None then selects RandomBot instead of NN-model
@@ -34,10 +32,10 @@ class RolloutWorker_v3:
         self.logger.info("Starting %d games", self.num_games)
 
         # Instantiate bots, use RandomBot if bot2_model not available
-        bot1 = BetterNetBot_v3(self.bot1_model_path, bot_name="BetterNet")
+        bot1 = BetterNetBot_v7(self.bot1_model_path, bot_name="BetterNet")
         if self.bot2_model_path.exists():
             save_trajectory = True if self.bot1_model_path == self.bot2_model_path else False;
-            bot2 = BetterNetBot_v3(self.bot2_model_path, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
+            bot2 = BetterNetBot_v7(self.bot2_model_path, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
         else:
             bot2 = RandomBot(bot_name="RandomBot")
 

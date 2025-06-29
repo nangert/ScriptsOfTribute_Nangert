@@ -2,11 +2,14 @@
 import torch.nn as nn
 from typing import Dict, Tuple
 
+from BetterNet.BetterNN.CardEmbedding import CardEmbedding
+from BetterNet.BetterNN.EffectsEmbedding import EffectsEmbedding
+from BetterNet.BetterNN.PatronEmbedding import PatronEmbedding
 from BetterNet.BetterNN.ResidualMLP import ResidualMLP
 from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
 from utils.move_to_tensor.move_to_tensor_v1 import MOVE_FEAT_DIM
 
-class BetterNetV3(nn.Module):
+class BetterNetV7(nn.Module):
     """
     BetterNetV3 includes an additional LSTM-Layer compared to BetterNetV2
     """
@@ -14,6 +17,7 @@ class BetterNetV3(nn.Module):
         self,
         hidden_dim: int = 128,
         num_moves: int = 10,
+        num_cards: int = 256
     ) -> None:
         super().__init__()
         # ----------------------------
@@ -50,6 +54,15 @@ class BetterNetV3(nn.Module):
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
+
+        # Shared card embedding
+        self.card_embedding = CardEmbedding(num_cards=num_cards, embed_dim=hidden_dim, scalar_feat_dim=3)
+
+        # Shared patron embedding
+        self.patron_embedding = PatronEmbedding(num_patrons=10, embed_dim=hidden_dim)
+
+        # Shared Effects embedding
+        self.effects_embedding = EffectsEmbedding(embed_dim=hidden_dim)
 
         # Tavern Encoder, Input head for current state of tavern, Encodes all cards currently in the tavern
         self.tavern_encoder = nn.Sequential(
@@ -117,14 +130,15 @@ class BetterNetV3(nn.Module):
         # ----------------------------
         # 1) Detect whether we’re in TRAIN vs INFER mode
         # ----------------------------
-        if move_tensor.dim() == 4:
+        current_shape = obs["player_stats"].shape
+        if len(current_shape) == 3:
             # ---------- TRAINING mode ----------
             # Expect:
             #   obs["player_stats"]:  [B, T, player_dim]
             #   obs["patron_tensor"]: [B, T, 10, 2]
             #   obs["tavern_tensor"]: [B, T, C, card_dim]
             #   move_tensor:          [B, T, N, move_feat_dim]
-            B, T, N, D_move = move_tensor.shape
+            B, T, N = current_shape
 
             # 1a) Encode player: [B, T, 14] → [B, T, hidden_dim]
             player = self.player_encoder(obs["player_stats"])
@@ -160,11 +174,11 @@ class BetterNetV3(nn.Module):
             return final_hidden_all, values
 
 
-        elif move_tensor.dim() == 3:
+        elif len(current_shape) == 2:
             # ---------- INFERENCE mode ----------
             # Make sure hidden is either None (to init zeros) or a valid (h, c)
 
-            B, N, D_move = move_tensor.shape
+            B, N = current_shape
 
             # 1) Prepare player_obs, patron_obs, tavern_obs with a “time” axis
             if obs["player_stats"].dim() == 2:
@@ -210,7 +224,10 @@ class BetterNetV3(nn.Module):
             final_hidden = lstm_out[:, -1, :]                  # [B, 256]
             final_hidden_proj = self.policy_proj(final_hidden) # [B, 128]
 
-            move_emb = self.move_encoder(move_tensor)          # [B, N, 128]
+            move_emb = torch.stack(
+                [self._embed_move_meta(m, obs["player_stats"].device).squeeze(0) for m in move_tensor],
+                dim=0).unsqueeze(0)
+
             logits = torch.bmm(move_emb, final_hidden_proj.unsqueeze(2)).squeeze(2)  # [B, N]
 
             return logits, value, new_hidden
@@ -219,3 +236,28 @@ class BetterNetV3(nn.Module):
             raise ValueError(
                 f"Unexpected move_tensor.dim()={move_tensor.dim()}; expected 3 or 4."
             )
+
+    def _embed_move_meta(self, meta: dict, device: torch.device) -> torch.Tensor:
+        """
+        Embed a single move metadata dictionary into a shared hidden space.
+
+        Expects one of the following keys to be populated:
+        - 'card_id': int (used with card_embedding)
+        - 'patron_id': int (used with patron_embedding)
+        - 'effect_vec': Tensor (used with effects_embedding)
+        If none of the above are valid, returns a zero tensor.
+        """
+        if meta["card_id"] is not None and meta["card_id"] >= 0:
+            card_id = torch.tensor([meta["card_id"]], dtype=torch.long, device=device)
+            feats = torch.zeros((1, 3), device=device)  # placeholder scalar features
+            return self.card_embedding(card_id, feats)  # [1, hidden_dim]
+
+        elif meta["patron_id"] is not None and meta["patron_id"] >= 0:
+            patron_id = torch.tensor([meta["patron_id"]], dtype=torch.long, device=device)
+            return self.patron_embedding(patron_id)  # [1, hidden_dim]
+
+        elif meta["effect_vec"] is not None and isinstance(meta["effect_vec"], torch.Tensor):
+            return self.effects_embedding(meta["effect_vec"].to(device).unsqueeze(0))  # [1, hidden_dim]
+
+        # Fallback: return zeros if move has no special target
+        return torch.zeros((1, self.policy_proj.out_features), device=device)  # [1, hidden_dim]

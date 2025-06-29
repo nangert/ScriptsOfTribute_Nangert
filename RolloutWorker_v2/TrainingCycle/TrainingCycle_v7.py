@@ -8,25 +8,26 @@ import re
 import torch
 import wandb
 
-from RolloutWorker_v2.Trainer.Trainer_v3 import Trainer_v3
+from RolloutWorker_v2.Trainer.Trainer_v7 import Trainer_v7
 from utils.model_versioning import get_latest_model_path
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+BASE_FILENAME = "BetterNet_v7_buffer"
 MODEL_DIR = Path("saved_models")
-MODEL_PREFIX = "better_net_v3_"
+MODEL_PREFIX = "better_net_v7_"
 SAVE_MODEL_PATH = MODEL_DIR
 
 GAME_BUFFERS_DIR = Path("game_buffers")
 MERGED_BUFFER_DIR = Path("saved_buffers")
 
 GAMES_PER_CYCLE = 64
-EPOCHS_PER_CYCLE = 5
+EPOCHS_PER_CYCLE = 2
 BATCH_SIZE = 32
 LEARNING_RATE = 3e-5
 SLEEP_IF_NO_DATA = 60
 
-def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_v3_buffer"):
+def get_lowest_buffer_file(buffer_dir: Path, base_filename=BASE_FILENAME):
     pattern = re.compile(rf"{base_filename}_(\d+)\.pkl")
     buffers = [
         (int(m.group(1)), file)
@@ -73,7 +74,7 @@ def main():
             model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             logger.info("Starting training with model: %s", model_path)
 
-            trainer = Trainer_v3(
+            trainer = Trainer_v7(
                 model_path=model_path,
                 buffer_path=buffer_file,
                 save_path=SAVE_MODEL_PATH,

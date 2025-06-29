@@ -172,7 +172,6 @@ class Trainer_v6:
         self._save_model()
         self.buffer.archive_buffer()
 
-
     def _save_model(self) -> None:
         """
         Saves the model with a new version number to avoid overwriting.

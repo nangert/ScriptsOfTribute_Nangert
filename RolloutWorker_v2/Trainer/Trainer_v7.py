@@ -7,14 +7,16 @@ import torch.optim as optim
 import wandb
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
-from ReplayBuffer.ReplayBuffer_v3 import ReplayBuffer_v3
+from BetterNet.BetterNN.BetterNet_v7 import BetterNetV7
+from ReplayBuffer.ReplayBuffer_v7 import ReplayBuffer_v7
 
 # Device configuration
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+MODEL_PREFIX = "better_net_v7_"
+EXTENSION = ".pt"
 
 
-class Trainer_v3:
+class Trainer_v7:
     """
     Handles model loading, training over replay buffer, and saving.
     """
@@ -38,9 +40,9 @@ class Trainer_v3:
         self.epochs = epochs
 
         # Initialize model
-        self.model = BetterNetV3(hidden_dim=128, num_moves=10).to(device)
+        self.model = BetterNetV7(hidden_dim=128, num_moves=10).to(DEVICE)
         if self.model_path.exists():
-            state = torch.load(self.model_path, map_location=device)
+            state = torch.load(self.model_path, map_location=DEVICE)
             self.model.load_state_dict(state)
             self.logger.info("Loaded model from %s", self.model_path.name)
         else:
@@ -51,7 +53,7 @@ class Trainer_v3:
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs * 2)
 
         # Replay buffer
-        self.buffer = ReplayBuffer_v3(self.buffer_path)
+        self.buffer = ReplayBuffer_v7(self.buffer_path)
 
     def train(
             self,
@@ -81,7 +83,6 @@ class Trainer_v3:
                 obs_batch = {k: v.to(device)[batch_inds] for k, v in obs_all.items()}  # [B', T, …]
                 actions_batch = actions_all.to(device)[batch_inds]  # [B', T]
                 returns_batch = returns_all.to(device)[batch_inds]  # [B', T]
-                moves_batch = moves_all.to(device)[batch_inds]  # [B', T, N, D]
                 oldlp_batch = old_lp_all.to(device)[batch_inds]  # [B', T]
                 oldval_batch = old_val_all.to(device)[batch_inds]  # [B', T]
                 lengths_batch = lengths_all[batch_inds]  # [B']
@@ -90,27 +91,35 @@ class Trainer_v3:
                 Bp = actions_batch.size(0)
 
                 # 2) Forward: get LSTM outputs and value predictions
-                final_hidden_all, values = self.model(obs_batch, moves_batch)
+                final_hidden_all, values = self.model(obs_batch, None)
                 #   lstm_out: [B', T, 256]
                 #   values:   [B', T]
 
                 # 3b) Encode all moves: flatten (B'*T, N, D) → embed → reshape to [B', T, N, 128]
-                Bt = Bp * T
-                N = moves_batch.size(2)
-                Dm = moves_batch.size(3)
-                move_flat = moves_batch.view(Bt, N, Dm)  # [B'*T, N, Dm]
-                move_emb_flat = self.model.move_encoder(move_flat)  # [B'*T, N, 128]
-                move_emb_all = move_emb_flat.view(Bp, T, N, -1)  # [B', T, N, 128]
+                move_meta_batch = [moves_all[i] for i in batch_inds.tolist()]
+                move_emb_nested = []
+                for episode in move_meta_batch:
+                    step_embs_list = []
+                    for step_meta in episode:
+                        step_embs = [self.model._embed_move_meta(m, device).squeeze(0) for m in step_meta]
+                        step_tensor = torch.stack(step_embs)
+                        step_tensor = torch.nn.functional.pad(step_tensor, (0, 0, 0, 10 - step_tensor.size(0)))
+                        step_embs_list.append(step_tensor)
+                    move_emb_nested.append(torch.stack(step_embs_list))
 
-                # 3c) For each (b,t), dot move_emb_all[b,t] (N×128) with final_hidden_all[b,t] (128)
-                # Flatten to do one big batched matmul:
-                H_flat = final_hidden_all.view(Bt, 128).unsqueeze(2)  # [B'*T, 128, 1]
-                M_flat = move_emb_all.view(Bt, N, 128)  # [B'*T, N, 128]
-                logits_flat = torch.bmm(M_flat, H_flat).squeeze(2)  # [B'*T, N]
-                logits_all = logits_flat.view(Bp, T, N)  # [B', T, N]
+                max_T = T
+                move_emb_padded = torch.stack([
+                    torch.nn.functional.pad(m, (0, 0, 0, 0, 0, max_T - m.size(0))) for m in move_emb_nested
+                ]).to(device)  # [B, T, 10, D]
+
+                Bt = Bp * T
+                H_flat = final_hidden_all.view(Bt, -1).unsqueeze(2)  # [B*T, 128, 1]
+                M_flat = move_emb_padded.view(Bt, 10, -1)
+                logits_flat = torch.bmm(M_flat, H_flat).squeeze(2)
+                logits_all = logits_flat.view(Bp, T, 10)
 
                 # 4) Build distributions & gather log‐probs for the *actions that were taken*:
-                dist_all = torch.distributions.Categorical(logits=logits_all.view(-1, N))  # [B'*T, N]
+                dist_all = torch.distributions.Categorical(logits=logits_all.view(-1, 10))  # [B'*T, N]
                 acts_flat = actions_batch.view(-1)  # [B'*T]
                 logp_flat = dist_all.log_prob(acts_flat)  # [B'*T]
 
@@ -183,23 +192,21 @@ class Trainer_v3:
         """
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
         model_dir = self.save_path
-        model_prefix = "better_net_v3_"
-        extension = ".pt"
 
         # Find all existing model files
-        existing_models = list(model_dir.glob(f"{model_prefix}*{extension}"))
+        existing_models = list(model_dir.glob(f"{MODEL_PREFIX}*{EXTENSION}"))
         if existing_models:
             versions = [
-                int(f.stem.replace(model_prefix, ""))
+                int(f.stem.replace(MODEL_PREFIX, ""))
                 for f in existing_models
-                if f.stem.replace(model_prefix, "").isdigit()
+                if f.stem.replace(MODEL_PREFIX, "").isdigit()
             ]
             current_version = max(versions)
         else:
             current_version = 0
 
         next_version = current_version + 1
-        new_save_path = model_dir / f"{model_prefix}{next_version}{extension}"
+        new_save_path = model_dir / f"{MODEL_PREFIX}{next_version}{EXTENSION}"
 
         torch.save(self.model.state_dict(), new_save_path)
         self.logger.info("Model saved to %s", new_save_path)

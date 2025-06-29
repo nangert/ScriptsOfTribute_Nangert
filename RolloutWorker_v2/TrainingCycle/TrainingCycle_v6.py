@@ -26,7 +26,7 @@ BATCH_SIZE = 32
 LEARNING_RATE = 1e-4
 SLEEP_IF_NO_DATA = 30
 
-def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_buffer_v6"):
+def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_v6_buffer"):
     pattern = re.compile(rf"{base_filename}_(\d+)\.pkl")
     buffers = [
         (int(m.group(1)), file)

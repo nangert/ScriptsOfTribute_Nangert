@@ -3,7 +3,7 @@ import random
 from datetime import datetime
 from pathlib import Path
 
-from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v3 import RolloutWorker_v3
+from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v7 import RolloutWorker_v7
 from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path, get_model_version_path
 
@@ -13,7 +13,8 @@ MERGED_BUFFER_PATH = Path("saved_buffers")
 
 # Directory for loading current model
 MODEL_DIR = Path("saved_models")
-MODEL_PREFIX = "better_net_v3_"
+MODEL_PREFIX = "better_net_v7_"
+REPLAY_BUFFER_BASENAME = 'BetterNet_v7_buffer'
 
 # Games generated per GameRunner instance
 GAMES_PER_CYCLE = 64
@@ -66,7 +67,7 @@ def main() -> None:
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
-            worker = RolloutWorker_v3(
+            worker = RolloutWorker_v7(
                 bot1_model_path=primary_model_path,
                 bot2_model_path=opponent_model_path,
                 num_games=GAMES_PER_CYCLE,
@@ -74,7 +75,7 @@ def main() -> None:
             )
             worker.run()
 
-            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename='BetterNet_v3_buffer')
+            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename=REPLAY_BUFFER_BASENAME)
 
             # Write generation summary log
             with open(LOG_DIR / "generation_summary.log", "a") as f:
