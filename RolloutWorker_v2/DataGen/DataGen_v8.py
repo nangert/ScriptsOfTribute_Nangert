@@ -17,7 +17,7 @@ MODEL_PREFIX = "better_net_v8_"
 REPLAY_BUFFER_BASENAME = 'BetterNet_v8_buffer'
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 128
+GAMES_PER_CYCLE = 64
 THREADS = 8
 
 # Directories for logging
@@ -91,7 +91,6 @@ def main() -> None:
                 num_threads=THREADS
             )
             worker.run()
-
 
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")

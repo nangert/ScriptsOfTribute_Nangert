@@ -7,17 +7,17 @@ import numpy as np
 import torch
 from pathlib import Path
 from typing import List, Optional
+from datetime import datetime, timezone
 
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
 from BetterNet.BetterNN.BetterNet_v8 import BetterNetV8
-from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
-from utils.game_state_to_tensor.game_state_to_vector_v3 import game_state_to_tensor_dict_v3
 from utils.game_state_to_tensor.game_state_to_vector_v4 import game_state_to_tensor_dict_v4
 from utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
 
-MODEL_VERSION = '_v7_buffer_'
+MODEL_VERSION = '_v8_buffer_'
+SUMMARY_DIR = Path("game_summaries")
 
 class BetterNetBot_v8(BaseAI):
     """
@@ -50,6 +50,15 @@ class BetterNetBot_v8(BaseAI):
         self.evaluate = evaluate
         self.hidden = None
 
+        # summary statistics
+        self.summary_stats: dict = {}
+        self.summary_stats["chosen_patrons"] = []
+        self.summary_stats["move"] = []
+        self.current_turn_move_count = 0
+        self.moves_per_turn: List[int] = []
+        self.end_turn_first_count = 0
+
+
     def _load_state(
         self, model: torch.nn.Module, path: Path, name: str
     ) -> bool:
@@ -73,6 +82,15 @@ class BetterNetBot_v8(BaseAI):
         self.winner = None
         self.hidden = None
 
+        # summary statistics
+        self.summary_stats: dict = {}
+        self.summary_stats["chosen_patrons"] = []
+        self.summary_stats["move"] = []
+        self.current_turn_move_count = 0
+        self.moves_per_turn: List[int] = []
+        self.end_turn_first_count = 0
+        self.summary_stats["player"] = None
+
     def select_patron(self, available_patrons: List[PatronId]) -> PatronId:
         """
         For now always select first available patron
@@ -80,7 +98,10 @@ class BetterNetBot_v8(BaseAI):
         """
         if not available_patrons:
             raise ValueError("No available patrons to select from.")
-        return random.choice(available_patrons)
+
+        patron = random.choice(available_patrons)
+        self.summary_stats["chosen_patrons"].append(patron.value)
+        return patron
 
     def play(
         self,
@@ -93,6 +114,9 @@ class BetterNetBot_v8(BaseAI):
         If self.evaluate = True chooses move with the highest probability
         If self.evaluate = False samples move from probability distribution
         """
+
+        if self.summary_stats["player"] is None:
+            self.summary_stats["player"] = game_state.current_player.player_id.name
 
         # 1) Convert state to tensors
         obs = game_state_to_tensor_dict_v4(game_state)
@@ -146,6 +170,24 @@ class BetterNetBot_v8(BaseAI):
         else:
             idx = 0
 
+        chosen_move = possible_moves[idx]
+
+        # --- TRACK PER-TURN STATISTICS ---
+        self.summary_stats["move"].append(chosen_move.command.name)
+
+        self.current_turn_move_count += 1
+
+        # detect "end turn" as first action
+        if (chosen_move.command.name == "END_TURN"
+                and self.current_turn_move_count == 1):
+            self.end_turn_first_count += 1
+
+        # when turn ends, record and reset
+        if chosen_move.command.name == "END_TURN":
+            self.moves_per_turn.append(self.current_turn_move_count)
+            self.current_turn_move_count = 0
+        # --- end tracking ---
+
         # 6) Save sample in episode / trajectory, discounted reward set at end of episode
         self.trajectory.append({
             "state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
@@ -156,8 +198,7 @@ class BetterNetBot_v8(BaseAI):
             "value_estimate": value.item()
         })
 
-        # return chosen move to GameRunner
-        return possible_moves[idx]
+        return chosen_move
 
     def game_end(self, end_game_state: EndGameState, final_state: GameState) -> None:
         """
@@ -178,8 +219,16 @@ class BetterNetBot_v8(BaseAI):
             discount_multiplier = γ ** (N - 1 - t)
             step["reward"] = final_reward * discount_multiplier * np.exp(step['old_log_prob'])
 
+        self.summary_stats["finished_at"] = datetime.now(timezone.utc).isoformat()
+        self.summary_stats["winner"] = end_game_state.winner
+        self.summary_stats["num_turns"] = len(self.moves_per_turn)
+        self.summary_stats["moves_per_turn"] = self.moves_per_turn
+        self.summary_stats["avg_moves_per_turn"] = np.mean(self.moves_per_turn) if self.moves_per_turn else 0.0
+        self.summary_stats["end_turn_first_count"] = self.end_turn_first_count
+
         if self.save_trajectory_flag:
             self.save_trajectory()
+            self.save_summary_stats()
 
     def save_trajectory(self) -> None:
         """
@@ -191,4 +240,11 @@ class BetterNetBot_v8(BaseAI):
         filename = buffer_dir / f"{self.bot_name}{MODEL_VERSION}{uuid.uuid4().hex}.pkl"
         with open(filename, "wb") as f:
             pickle.dump(self.trajectory, f)
+            f.flush()
+
+    def save_summary_stats(self) -> None:
+        SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
+        filename = SUMMARY_DIR / f"{self.bot_name}{MODEL_VERSION}{uuid.uuid4().hex}_summary.pkl"
+        with open(filename, "wb") as f:
+            pickle.dump(self.summary_stats, f)
             f.flush()
