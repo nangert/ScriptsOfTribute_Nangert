@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v8 import RolloutWorker_v8
+from utils.merge_game_summaries import merge_game_summaries
 from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path, get_model_version_path
 
@@ -79,7 +80,7 @@ def main() -> None:
             )
             worker.run()
 
-
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
@@ -92,6 +93,7 @@ def main() -> None:
             )
             worker.run()
 
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
@@ -105,6 +107,13 @@ def main() -> None:
             worker.run()
 
             merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename=REPLAY_BUFFER_BASENAME)
+
+            merged_file = merge_game_summaries(
+                summary_dir=Path("game_summaries"),
+                merged_summary_dir=Path("merged_summaries"),
+                used_summary_dir=Path("used_summaries"),
+                base_filename="BetterNet_summary"
+            )
 
             # Write generation summary log
             with open(LOG_DIR / "generation_summary.log", "a") as f:

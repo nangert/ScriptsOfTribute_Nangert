@@ -63,34 +63,40 @@ class Trainer_v8:
             value_coeff: float = 0.5,
             entropy_coeff: float = 0.01,
     ):
-        # 1) Load one batch of B episodes (e.g. B=128) from the buffer
+        # 1) Load the entire buffer (B episodes)
         obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
             self.buffer.get_all()
         B, T = actions_all.shape
-        self.logger.info("Training on %d episodes, each padded to length %d, %d PPO epochs",
-                         B, T, self.epochs)
+        self.logger.info(
+            "Training on %d episodes, each padded to length %d, %d PPO epochs",
+            B, T, self.epochs
+        )
 
         device = next(self.model.parameters()).device
         lengths_all = lengths_all.to(device)  # [B]
-        mask_all = (torch.arange(T, device=device).unsqueeze(0) < lengths_all.unsqueeze(1)).float()  # [B, T]
+        mask_all = (
+            torch.arange(T, device=device)
+            .unsqueeze(0)
+            .lt(lengths_all.unsqueeze(1))
+            .float()
+        )  # [B, T]
 
         step = 0
         for epoch in range(1, self.epochs + 1):
-            perm = torch.randperm(B, device=device)
-
+            # Instead of shuffling each epoch, we rely on the buffer already being randomized
             for start in range(0, B, batch_size):
-                batch_inds = perm[start: start + batch_size]
-                # Move to GPU *before* indexing
-                obs_batch = {k: v.to(device)[batch_inds] for k, v in obs_all.items()}  # [B', T, …]
-                actions_batch = actions_all.to(device)[batch_inds]  # [B', T]
-                returns_batch = returns_all.to(device)[batch_inds]  # [B', T]
-                moves_batch = moves_all.to(device)[batch_inds]  # [B', T, N, D]
-                oldlp_batch = old_lp_all.to(device)[batch_inds]  # [B', T]
-                oldval_batch = old_val_all.to(device)[batch_inds]  # [B', T]
-                lengths_batch = lengths_all[batch_inds]  # [B']
-                mask_batch = mask_all[batch_inds]  # [B', T]
+                end = min(start + batch_size, B)
+                # slice out this batch
+                obs_batch = {k: v.to(device)[start:end] for k, v in obs_all.items()}  # [B', T, …]
+                actions_batch = actions_all.to(device)[start:end]  # [B', T]
+                returns_batch = returns_all.to(device)[start:end]  # [B', T]
+                moves_batch = moves_all.to(device)[start:end]  # [B', T, N, D]
+                oldlp_batch = old_lp_all.to(device)[start:end]  # [B', T]
+                oldval_batch = old_val_all.to(device)[start:end]  # [B', T]
+                lengths_batch = lengths_all[start:end]  # [B']
+                mask_batch = mask_all[start:end]  # [B', T]
 
-                Bp = actions_batch.size(0)
+                Bp = end - start  # actual batch size
 
                 # 2) Forward: get LSTM outputs and value predictions
                 final_hidden_all, values = self.model(obs_batch, moves_batch)
@@ -171,10 +177,10 @@ class Trainer_v8:
 
                 step += 1
 
-            self.logger.info(
-                "Epoch %d/%d complete | total_loss=%.4f | pol_loss=%.4f | val_loss=%.4f | ent=%.4f",
-                epoch, self.epochs, total_loss.item(), pol_loss.item(), value_loss.item(), ent.item()
-            )
+                self.logger.info(
+                    "Epoch %d/%d complete | total_loss=%.4f | pol_loss=%.4f | val_loss=%.4f | ent=%.4f",
+                    epoch, self.epochs, total_loss.item(), pol_loss.item(), value_loss.item(), ent.item()
+                )
 
         # After all epochs on this batch:
         self._save_model()

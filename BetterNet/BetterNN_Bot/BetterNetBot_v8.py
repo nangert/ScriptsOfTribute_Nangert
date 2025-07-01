@@ -207,7 +207,7 @@ class BetterNetBot_v8(BaseAI):
         """
 
         winner = end_game_state.winner
-        if winner == "PLAYER1":
+        if winner == self.summary_stats["player"]:
             final_reward = 1.0
         else:
             final_reward = -1.0
@@ -217,7 +217,8 @@ class BetterNetBot_v8(BaseAI):
 
         for t, step in enumerate(self.trajectory):
             discount_multiplier = γ ** (N - 1 - t)
-            step["reward"] = final_reward * discount_multiplier * np.exp(step['old_log_prob'])
+            step["reward"] = final_reward * discount_multiplier
+            #step["reward"] = final_reward * discount_multiplier * np.exp(step['old_log_prob'])
 
         self.summary_stats["finished_at"] = datetime.now(timezone.utc).isoformat()
         self.summary_stats["winner"] = end_game_state.winner
