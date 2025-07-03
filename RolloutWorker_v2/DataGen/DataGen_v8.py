@@ -18,8 +18,10 @@ MODEL_PREFIX = "better_net_v8_"
 REPLAY_BUFFER_BASENAME = 'BetterNet_v8_buffer'
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 128
 THREADS = 8
+
+USE_RECENT_MODELS = False
 
 # Directories for logging
 LOG_DIR = Path("logs")
@@ -80,7 +82,6 @@ def main() -> None:
             )
             worker.run()
 
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
@@ -93,7 +94,6 @@ def main() -> None:
             )
             worker.run()
 
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
@@ -106,7 +106,8 @@ def main() -> None:
             )
             worker.run()
 
-            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename=REPLAY_BUFFER_BASENAME)
+            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH,
+                                 base_filename=REPLAY_BUFFER_BASENAME)
 
             merged_file = merge_game_summaries(
                 summary_dir=Path("game_summaries"),

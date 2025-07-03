@@ -18,6 +18,8 @@ from utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
 
 MODEL_VERSION = '_v8_buffer_'
 SUMMARY_DIR = Path("game_summaries")
+GOOD_MODEL_DIR = Path("good_models")
+GOOD_MODEL_NAME = "better_net_v8_48.pt"
 
 class BetterNetBot_v8(BaseAI):
     """
@@ -36,16 +38,27 @@ class BetterNetBot_v8(BaseAI):
         self.logger = logging.getLogger(self.__class__.__name__)
 
         model = BetterNetV8(hidden_dim=128, num_moves=10)
+
         if model_path.exists():
             self._load_state(model, model_path, model_path.name)
         else:
+            '''
+            good_model_path = Path(GOOD_MODEL_DIR / f"{GOOD_MODEL_NAME}")
+            old_state = torch.load(good_model_path, map_location="cpu")
+            card_embed_keys = [k for k in old_state if k.startswith("card_embedding.")]
+            new_state = model.state_dict()
+            for key in card_embed_keys:
+                if key in new_state:
+                    new_state[key] = old_state[key]
+
+            model.load_state_dict(new_state)
+            '''
             self.logger.warning("Primary model not found; using random initialization.")
 
         self.model = model
         self.model.eval()
 
         self.trajectory: List[dict] = []
-        self.winner: Optional[str] = None
         self.save_trajectory_flag = save_trajectory
         self.evaluate = evaluate
         self.hidden = None
@@ -79,7 +92,6 @@ class BetterNetBot_v8(BaseAI):
     def pregame_prepare(self) -> None:
         """Reset history, trajectory, winner and lstm-hidden-layer before each game."""
         self.trajectory.clear()
-        self.winner = None
         self.hidden = None
 
         # summary statistics
@@ -207,7 +219,8 @@ class BetterNetBot_v8(BaseAI):
         """
 
         winner = end_game_state.winner
-        if winner == self.summary_stats["player"]:
+        #if winner == self.summary_stats["player"]:
+        if winner == "PLAYER_1":
             final_reward = 1.0
         else:
             final_reward = -1.0

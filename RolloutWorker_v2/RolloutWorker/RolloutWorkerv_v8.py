@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 import torch
+
 from scripts_of_tribute.game import Game
 
 from BetterNet.BetterNN_Bot.BetterNetBot_v8 import BetterNetBot_v8
@@ -19,13 +20,15 @@ class RolloutWorker_v8:
         bot1_model_path: Path,
         bot2_model_path: Optional[Path],
         num_games: int = 10,
-        num_threads: int = 8
+        num_threads: int = 8,
+        player_plays_both_sides: bool = False,
     ):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.bot1_model_path = bot1_model_path
         self.bot2_model_path = bot2_model_path
         self.num_games = num_games
         self.num_threads = num_threads
+        self.player_plays_both_sides = player_plays_both_sides
 
 
     def run(self) -> None:
@@ -46,18 +49,6 @@ class RolloutWorker_v8:
         game.run(
             bot1.bot_name,
             bot2.bot_name,
-            start_game_runner=True,
-            runs=self.num_games,
-            threads=self.num_threads,
-            timeout=999,
-        )
-
-        game = Game()
-        game.register_bot(bot2)
-        game.register_bot(bot1)
-        game.run(
-            bot2.bot_name,
-            bot1.bot_name,
             start_game_runner=True,
             runs=self.num_games,
             threads=self.num_threads,

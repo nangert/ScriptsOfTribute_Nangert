@@ -23,7 +23,7 @@ MERGED_BUFFER_DIR = Path("saved_buffers")
 GAMES_PER_CYCLE = 64
 EPOCHS_PER_CYCLE = 2
 BATCH_SIZE = 64
-LEARNING_RATE = 5e-5
+LEARNING_RATE = 3e-5
 SLEEP_IF_NO_DATA = 60
 
 def get_lowest_buffer_file(buffer_dir: Path, base_filename="BetterNet_v8_buffer"):
