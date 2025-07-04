@@ -1,5 +1,4 @@
 ﻿import pickle
-import random
 import uuid
 import logging
 
@@ -11,13 +10,12 @@ from typing import List, Optional
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
-from BetterNet.BetterNN.BetterNet_v8 import BetterNetV8
+from BetterNet.BetterNN.BetterNet_v9 import BetterNetV9
 from utils.game_state_to_tensor.game_state_to_vector_v4 import game_state_to_tensor_dict_v4
 from utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
 
-MODEL_VERSION = '_v8_buffer_'
 
-class BetterNetBot_v8(BaseAI):
+class BetterNetBot_v9(BaseAI):
     """
     Bot that uses a neural network policy to select moves.
     Includes lstm-Layer.
@@ -33,7 +31,7 @@ class BetterNetBot_v8(BaseAI):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        model = BetterNetV8(hidden_dim=128, num_moves=10)
+        model = BetterNetV9(hidden_dim=128, num_moves=10)
         if model_path.exists():
             self._load_state(model, model_path, model_path.name)
         else:
@@ -78,7 +76,7 @@ class BetterNetBot_v8(BaseAI):
         """
         if not available_patrons:
             raise ValueError("No available patrons to select from.")
-        return random.choice(available_patrons)
+        return available_patrons[0]
 
     def play(
         self,
@@ -175,7 +173,6 @@ class BetterNetBot_v8(BaseAI):
         for t, step in enumerate(self.trajectory):
             discount_multiplier = γ ** (N - 1 - t)
             step["reward"] = final_reward * discount_multiplier
-            #step["reward"] = final_reward * discount_multiplier * np.exp(step['old_log_prob'])
 
         if self.save_trajectory_flag:
             self.save_trajectory()
@@ -187,7 +184,7 @@ class BetterNetBot_v8(BaseAI):
         """
         buffer_dir = Path("game_buffers")
         buffer_dir.mkdir(parents=True, exist_ok=True)
-        filename = buffer_dir / f"{self.bot_name}{MODEL_VERSION}{uuid.uuid4().hex}.pkl"
+        filename = buffer_dir / f"{self.bot_name}_v9_buffer_{uuid.uuid4().hex}.pkl"
         with open(filename, "wb") as f:
             pickle.dump(self.trajectory, f)
             f.flush()

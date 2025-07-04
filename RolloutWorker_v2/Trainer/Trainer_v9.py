@@ -2,22 +2,19 @@
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 import torch
 import torch.optim as optim
 import wandb
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from BetterNet.BetterNN.BetterNet_v8 import BetterNetV8
-from ReplayBuffer.ReplayBuffer_v8 import ReplayBuffer_v8
+from BetterNet.BetterNN.BetterNet_v9 import BetterNetV9
+from ReplayBuffer.ReplayBuffer_v9 import ReplayBuffer_v9
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MODEL_PREFIX = "better_net_v8_"
-EXTENSION = ".pt"
 
 
-class Trainer_v8:
+class Trainer_v9:
     """
     Handles model loading, training over replay buffer, and saving.
     """
@@ -41,7 +38,7 @@ class Trainer_v8:
         self.epochs = epochs
 
         # Initialize model
-        self.model = BetterNetV8(hidden_dim=128, num_moves=10).to(device)
+        self.model = BetterNetV9(hidden_dim=128, num_moves=10).to(device)
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=device)
             self.model.load_state_dict(state)
@@ -54,7 +51,7 @@ class Trainer_v8:
         self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs * 2)
 
         # Replay buffer
-        self.buffer = ReplayBuffer_v8(self.buffer_path)
+        self.buffer = ReplayBuffer_v9(self.buffer_path)
 
     def train(
             self,
@@ -151,7 +148,7 @@ class Trainer_v8:
                 ent = (entropy_flat * mask_flat).sum() / mask_flat.sum()
 
                 # 11) Total loss and backward
-                total_loss = abs(pol_loss) + value_coeff * abs(value_loss) - entropy_coeff * ent
+                total_loss = pol_loss + value_coeff * value_loss - entropy_coeff * ent
                 total_loss.backward()
 
                 # 12) Gradient clipping + step
@@ -186,21 +183,23 @@ class Trainer_v8:
         """
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
         model_dir = self.save_path
+        model_prefix = "better_net_v9_"
+        extension = ".pt"
 
         # Find all existing model files
-        existing_models = list(model_dir.glob(f"{MODEL_PREFIX}*{EXTENSION}"))
+        existing_models = list(model_dir.glob(f"{model_prefix}*{extension}"))
         if existing_models:
             versions = [
-                int(f.stem.replace(MODEL_PREFIX, ""))
+                int(f.stem.replace(model_prefix, ""))
                 for f in existing_models
-                if f.stem.replace(MODEL_PREFIX, "").isdigit()
+                if f.stem.replace(model_prefix, "").isdigit()
             ]
             current_version = max(versions)
         else:
             current_version = 0
 
         next_version = current_version + 1
-        new_save_path = model_dir / f"{MODEL_PREFIX}{next_version}{EXTENSION}"
+        new_save_path = model_dir / f"{model_prefix}{next_version}{extension}"
 
         torch.save(self.model.state_dict(), new_save_path)
         self.logger.info("Model saved to %s", new_save_path)
