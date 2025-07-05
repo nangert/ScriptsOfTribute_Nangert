@@ -3,8 +3,7 @@ import random
 from datetime import datetime
 from pathlib import Path
 
-from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v8 import RolloutWorker_v8
-from utils.merge_game_summaries import merge_game_summaries
+from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v10 import RolloutWorker_v10
 from utils.merge_replay_buffers import merge_replay_buffers
 from utils.model_versioning import get_latest_model_path, get_model_version_path
 
@@ -14,11 +13,11 @@ MERGED_BUFFER_PATH = Path("saved_buffers")
 
 # Directory for loading current model
 MODEL_DIR = Path("saved_models")
-MODEL_PREFIX = "better_net_v8_"
-REPLAY_BUFFER_BASENAME = 'BetterNet_v8_buffer'
+MODEL_PREFIX = "better_net_v10_"
+BASE_FILENAME = 'BetterNet_v10_buffer'
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 128
+GAMES_PER_CYCLE = 64
 THREADS = 8
 
 # Directories for logging
@@ -69,23 +68,25 @@ def main() -> None:
     while True:
         try:
             primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            logger.info(f"Primary Model: {primary_model_path}")
-            logger.info(f"Opponent Model: {primary_model_path}")
+            opponent_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            #opponent_model_path = select_opponent_model()
 
-            worker = RolloutWorker_v8(
+            logger.info(f"Primary Model: {primary_model_path}")
+            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
+
+            worker = RolloutWorker_v10(
                 bot1_model_path=primary_model_path,
-                bot2_model_path=primary_model_path,
+                bot2_model_path=opponent_model_path,
                 num_games=GAMES_PER_CYCLE,
                 num_threads=THREADS
             )
             worker.run()
 
-
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
-            worker = RolloutWorker_v8(
+            worker = RolloutWorker_v10(
                 bot1_model_path=primary_model_path,
                 bot2_model_path=opponent_model_path,
                 num_games=int(GAMES_PER_CYCLE / 2),
@@ -93,12 +94,11 @@ def main() -> None:
             )
             worker.run()
 
-
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
-            worker = RolloutWorker_v8(
+            worker = RolloutWorker_v10(
                 bot1_model_path=primary_model_path,
                 bot2_model_path=opponent_model_path,
                 num_games=int(GAMES_PER_CYCLE / 2),
@@ -106,14 +106,7 @@ def main() -> None:
             )
             worker.run()
 
-            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename=REPLAY_BUFFER_BASENAME)
-
-            merged_file = merge_game_summaries(
-                summary_dir=Path("game_summaries"),
-                merged_summary_dir=Path("merged_summaries"),
-                used_summary_dir=Path("used_summaries"),
-                base_filename="BetterNet_summary"
-            )
+            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename=BASE_FILENAME)
 
             # Write generation summary log
             with open(LOG_DIR / "generation_summary.log", "a") as f:

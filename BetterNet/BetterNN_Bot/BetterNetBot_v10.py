@@ -2,24 +2,24 @@
 import random
 import uuid
 import logging
-from datetime import datetime, timezone
 
 import numpy as np
 import torch
 from pathlib import Path
 from typing import List, Optional
+from datetime import datetime, timezone
 
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
-from BetterNet.BetterNN.BetterNet_v8 import BetterNetV8
+from BetterNet.BetterNN.BetterNet_v10 import BetterNetV10
 from utils.game_state_to_tensor.game_state_to_vector_v4 import game_state_to_tensor_dict_v4
 from utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
 
-MODEL_VERSION = '_v8_buffer_'
+MODEL_VERSION = '_v10_buffer_'
 SUMMARY_DIR = Path("game_summaries")
 
-class BetterNetBot_v8(BaseAI):
+class BetterNetBot_v10(BaseAI):
     """
     Bot that uses a neural network policy to select moves.
     Includes lstm-Layer.
@@ -35,7 +35,7 @@ class BetterNetBot_v8(BaseAI):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        model = BetterNetV8(hidden_dim=128, num_moves=10)
+        model = BetterNetV10(hidden_dim=128, num_moves=10)
         if model_path.exists():
             self._load_state(model, model_path, model_path.name)
         else:
@@ -216,7 +216,6 @@ class BetterNetBot_v8(BaseAI):
         for t, step in enumerate(self.trajectory):
             discount_multiplier = γ ** (N - 1 - t)
             step["reward"] = final_reward * discount_multiplier
-            #step["reward"] = final_reward * discount_multiplier * np.exp(step['old_log_prob'])
 
         self.summary_stats["finished_at"] = datetime.now(timezone.utc).isoformat()
         self.summary_stats["winner"] = end_game_state.winner

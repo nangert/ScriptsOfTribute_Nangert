@@ -6,10 +6,10 @@ from typing import Optional
 import torch
 from scripts_of_tribute.game import Game
 
-from BetterNet.BetterNN_Bot.BetterNetBot_v9 import BetterNetBot_v9
+from BetterNet.BetterNN_Bot.BetterNetBot_v10 import BetterNetBot_v10
 from RandomBot.RandomBot import RandomBot
 
-class RolloutWorker_v9:
+class RolloutWorker_v10:
     """
     Rollout worker for loading models from file_paths and running GameRunner with loaded models
     bot2_model_path is optional, if None then selects RandomBot instead of NN-model
@@ -33,10 +33,10 @@ class RolloutWorker_v9:
         self.logger.info("Starting %d games", self.num_games)
 
         # Instantiate bots, use RandomBot if bot2_model not available
-        bot1 = BetterNetBot_v9(self.bot1_model_path, bot_name="BetterNet")
+        bot1 = BetterNetBot_v10(self.bot1_model_path, bot_name="BetterNet")
         if self.bot2_model_path.exists():
             save_trajectory = True if self.bot1_model_path == self.bot2_model_path else False;
-            bot2 = BetterNetBot_v9(self.bot2_model_path, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
+            bot2 = BetterNetBot_v10(self.bot2_model_path, bot_name="BetterNetOpponent", save_trajectory=save_trajectory)
         else:
             bot2 = RandomBot(bot_name="RandomBot")
 
@@ -49,8 +49,7 @@ class RolloutWorker_v9:
             start_game_runner=True,
             runs=self.num_games,
             threads=self.num_threads,
-            timeout=999,
-            seed=42
+            timeout=999
         )
 
         self.logger.info("Finished %d games", self.num_games)

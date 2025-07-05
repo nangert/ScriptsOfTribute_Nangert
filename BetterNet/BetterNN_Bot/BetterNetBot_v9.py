@@ -1,4 +1,5 @@
 ﻿import pickle
+import random
 import uuid
 import logging
 
@@ -76,7 +77,7 @@ class BetterNetBot_v9(BaseAI):
         """
         if not available_patrons:
             raise ValueError("No available patrons to select from.")
-        return available_patrons[0]
+        return random.choice(available_patrons)
 
     def play(
         self,
