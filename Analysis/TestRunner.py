@@ -5,6 +5,7 @@ from pathlib import Path
 from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
 from BetterNet.BetterNN_Bot.BetterNetBot_v10 import BetterNetBot_v10
 from BetterNet.BetterNN_Bot.BetterNetBot_v11 import BetterNetBot_v11
+from BetterNet.BetterNN_Bot.BetterNetBot_v12 import BetterNetBot_v12
 from BetterNet.BetterNN_Bot.BetterNetBot_v2 import BetterNetBot_v2
 from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
 from BetterNet.BetterNN.BetterNet_v2 import BetterNetV2
@@ -23,35 +24,37 @@ MODEL_PREFIX = "better_net_v"
 def main():
     primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
 
-    bot1_path = Path('./good_models/BetterNet_v11/better_net_v11_10.pt')
-    bot2_path = Path('./good_models/BetterNet_v10/better_net_v10_15.pt')
+    bot1_path = Path('./good_models/BetterNet_v10_2/better_net_v10_20.pt')
+    bot2_path = Path('./good_models/BetterNet_v12/better_net_v12_25.pt')
 
-    bot1 = BetterNetBot_v11(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
-    #bot2 = BetterNetBot_v10(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
-    bot2 = RandomBot(bot_name="RandomBot")
+    bot1 = BetterNetBot_v10(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
+    bot2 = BetterNetBot_v12(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
+    #bot2 = RandomBot(bot_name="RandomBot")
 
     game = Game()
-    game.register_bot(bot1)
+    #game.register_bot(bot1)
     game.register_bot(bot2)
     game.run(
         #"SOISMCTS",
-        bot1.bot_name,
+        "Sakkirin",
+        #bot1.bot_name,
         bot2.bot_name,
         start_game_runner=True,
-        runs=128,
+        runs=256,
         threads=8,
         timeout=9999,
     )
 
     game = Game()
     game.register_bot(bot2)
-    game.register_bot(bot1)
+    #game.register_bot(bot1)
     game.run(
         bot2.bot_name,
         #"SOISMCTS",
-        bot1.bot_name,
+        "Sakkirin",
+        #bot1.bot_name,
         start_game_runner=True,
-        runs=128,
+        runs=256,
         threads=8,
         timeout=9999,
     )

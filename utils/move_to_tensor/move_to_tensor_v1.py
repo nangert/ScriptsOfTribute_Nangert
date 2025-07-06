@@ -27,9 +27,7 @@ def move_to_tensor(move: BasicMove, game_state: GameState) -> torch.Tensor:
 
     card_vector = torch.zeros(CARD_EMBED_DIM)
     if isinstance(move, SimpleCardMove):
-        # move only stores cardId -> have to fetch specific card manually first before turning it into card_tensor
         card_id = move.cardUniqueId
-
         all_cards = (
             game_state.current_player.hand +
             game_state.current_player.played +
@@ -38,7 +36,6 @@ def move_to_tensor(move: BasicMove, game_state: GameState) -> torch.Tensor:
             game_state.current_player.known_upcoming_draws +
             game_state.tavern_available_cards
         )
-
         found = next((c for c in all_cards if c.unique_id == card_id), None)
         if found is not None:
             card_vector = encode_card_tensor(found)

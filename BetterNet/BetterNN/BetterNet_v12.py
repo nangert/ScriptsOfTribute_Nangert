@@ -7,7 +7,7 @@ from BetterNet.BetterNN.EffectsEmbedding import EffectsEmbedding
 from BetterNet.BetterNN.PatronEmbedding import PatronEmbedding
 from BetterNet.BetterNN.ResidualMLP import ResidualMLP
 from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
-from utils.move_to_tensor.move_to_tensor_v1 import MOVE_FEAT_DIM
+from utils.move_to_tensor.move_to_tensor_v3 import MOVE_FEAT_DIM
 
 class BetterNetV12(nn.Module):
     """
@@ -82,19 +82,11 @@ class BetterNetV12(nn.Module):
         # Fusion & LSTM
         # ----------------------------
         # We will concatenate (player, patron, tavern) → 3*hidden_dim, then fuse to hidden_dim
-        self.bt_embed = nn.Sequential(
-            nn.Linear(hidden_dim * 7, hidden_dim),
+        self.fusion = nn.Sequential(
+            nn.Linear(hidden_dim * 6, hidden_dim),
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
-
-        self.action_fusion = nn.Sequential(
-            nn.Linear(hidden_dim * 5, hidden_dim),  # patron, tav, hand, played, move
-            nn.ReLU(),
-        )
-        # 2) pool (mean) across actions, then ResidualMLP
-        self.action_resid = ResidualMLP(hidden_dim, hidden_dim)
-        self.fc = nn.Linear(hidden_dim, hidden_dim)
 
         # LSTM: input_size=hidden_dim, hidden_size=256, batch_first=True
         self.lstm = nn.LSTM(
@@ -110,7 +102,7 @@ class BetterNetV12(nn.Module):
         # Output Heads
         # ----------------------------
         # Critic head: from the 128-dim “fusion context” at each timestep to a scalar
-        self.value_head = nn.Linear(256, 1)
+        self.value_head = nn.Linear(hidden_dim, 1)
 
         # We do *not* define a policy_head here.  Instead, at inference time, we will:
         #   1) project final LSTM hidden (256→128),
@@ -156,45 +148,39 @@ class BetterNetV12(nn.Module):
         # 1) Detect whether we’re in TRAIN vs INFER mode
         # ----------------------------
         if move_tensor.dim() == 4:
-            B, T, N, Dm = move_tensor.shape
             cur_encoded = self.cur_player_encoder(obs["current_player"])
             opp_encoded = self.enemy_player_encoder(obs["enemy_player"])
-            patron_encoded = self.patron_encoder(obs["patron_tensor"].flatten(-2))
-            # tavern attention
-            tavern_B, tavern_T, tavern_N = obs["tavern_available_ids"].shape
-            tav_flat = self.card_embedding(
-                obs["tavern_available_ids"].view(tavern_B * tavern_T, tavern_N),
-                obs["tavern_available_feats"].view(tavern_B * tavern_T, tavern_N, -1))
-            tav_attn = self.tavern_available_attention(tav_flat).view(tavern_B, tavern_T, -1)
+            patron_encoded = self.patron_encoder(obs["patron_tensor"].flatten(start_dim=-2))
+
+            B, T, N = obs["tavern_available_ids"].shape
+            tav_avail = self.card_embedding(
+                obs["tavern_available_ids"].view(B * T, N),
+                obs["tavern_available_feats"].view(B * T, N, -1)
+            )  # [B*T, N, D]
+            tav_avail_attn = self.tavern_available_attention(tav_avail)  # [B*T, D]
+            tav_avail_attn = tav_avail_attn.view(B, T, -1)
+
             hand_enc = embed_mean("hand", B, T)
             played_enc = embed_mean("played", B, T)
 
-            move_emb = self.move_encoder(move_tensor)  # [B,T,N,H]
-            pc = patron_encoded.unsqueeze(2).expand(B, T, N, -1)
-            ta = tav_attn.unsqueeze(2).expand(B, T, N, -1)
-            he = hand_enc.unsqueeze(2).expand(B, T, N, -1)
-            pe = played_enc.unsqueeze(2).expand(B, T, N, -1)
-            fusion_in = torch.cat([pc, ta, he, pe, move_emb], dim=-1)  # [B,T,N,5H]
-            action_fus = self.action_fusion(fusion_in)  # [B,T,N,H]
-            action_mean = action_fus.mean(dim=2, keepdim=True)  # [B,T,1,H]
-            # if you still need a pooled embedding in the net:
-            action_emb = self.action_resid(action_mean.squeeze(2))
+            context = self.fusion(torch.cat([
+                cur_encoded,
+                opp_encoded,
+                patron_encoded,
+                tav_avail_attn,
+                hand_enc,
+                played_enc,
+            ], dim=-1))
 
-            bt_in = torch.cat([
-                cur_encoded, opp_encoded, patron_encoded,
-                tav_attn, hand_enc, played_enc, action_emb
-            ], dim=-1)  # [B,T,6H]
-            lstm_out, _ = self.lstm(self.bt_embed(bt_in))  # [B,T,256]
-            values = self.value_head(lstm_out).squeeze(-1)  # [B,T]
-            final_hidden = self.policy_proj(lstm_out)  # [B,T,H]
+            lstm_out, _ = self.lstm(context)
 
-            Bt = B * T
-            M_flat = action_fus.view(Bt, N, -1)  # [Bt, N, H]
-            H_flat = final_hidden.view(Bt, -1).unsqueeze(2)  # [Bt, H, 1]
-            logits_flat = torch.bmm(M_flat, H_flat).squeeze(2)  # [Bt, N]
-            logits_all = logits_flat.view(B, T, N)  # [B, T, N]
+            # 1f) Critic (value) head uses the *fusion context* (128-dim) at each time:
+            #     values: [B, T, 1] → squeeze → [B, T]
+            values = self.value_head(context).squeeze(-1)
 
-            return logits_all, values
+            final_hidden_all = self.policy_proj(lstm_out)
+
+            return final_hidden_all, values
 
 
         elif move_tensor.dim() == 3:
@@ -212,38 +198,21 @@ class BetterNetV12(nn.Module):
             hand_enc = embed_mean("hand", B, 1)
             played_enc = embed_mean("played", B, 1)
 
-            move_emb = self.move_encoder(move_tensor)  # [B, N, 128]
-
-            move_emb_B, move_emb_N, move_emb_H = move_emb.shape
-
-            pc = patron_encoded.expand(move_emb_B, move_emb_N, move_emb_H)
-            ta = tav_avail_attn.expand(move_emb_B, move_emb_N, move_emb_H)
-            he = hand_enc.expand(move_emb_B, move_emb_N, move_emb_H)
-            pe = played_enc.expand(move_emb_B, move_emb_N, move_emb_H)
-
-            fusion_in = torch.cat([pc, ta, he, pe, move_emb], dim=-1)
-            action_fusion = self.action_fusion(fusion_in)
-            action_mean = action_fusion.mean(dim=1)
-            action_embedding = self.action_resid(action_mean).unsqueeze(1)
-
-            move_emb = self.fc(action_fusion)
-
-            bt_embedding = self.bt_embed(torch.cat([
+            context = self.fusion(torch.cat([
                 cur_encoded,
                 opp_encoded,
                 patron_encoded,
                 tav_avail_attn,
                 hand_enc,
                 played_enc,
-                action_embedding
             ], dim=-1))
 
-            lstm_out, new_hidden = self.lstm(bt_embedding, hidden)
-
-            value = self.value_head(lstm_out).squeeze(-1).squeeze(-1)
+            lstm_out, new_hidden = self.lstm(context, hidden)
+            value = self.value_head(context).squeeze(-1).squeeze(-1)
 
             final_hidden = lstm_out[:, -1, :]
             final_hidden_proj = self.policy_proj(final_hidden)
+            move_emb = self.move_encoder(move_tensor)  # [B, N, 128]
             logits = torch.bmm(move_emb, final_hidden_proj.unsqueeze(2)).squeeze(2)  # [B, N]
 
             return logits, value, new_hidden
