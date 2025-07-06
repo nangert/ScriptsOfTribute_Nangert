@@ -23,7 +23,7 @@ MODEL_PREFIX = "better_net_v"
 def main():
     primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
 
-    bot1_path = Path('./good_models/BetterNet_v10_2/better_net_v10_2422.pt')
+    bot1_path = Path('./good_models/BetterNet_v11/better_net_v11_10.pt')
     bot2_path = Path('./good_models/BetterNet_v10/better_net_v10_15.pt')
 
     bot1 = BetterNetBot_v11(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
@@ -38,8 +38,8 @@ def main():
         bot1.bot_name,
         bot2.bot_name,
         start_game_runner=True,
-        runs=1,
-        threads=1,
+        runs=128,
+        threads=8,
         timeout=9999,
     )
 
@@ -51,7 +51,7 @@ def main():
         #"SOISMCTS",
         bot1.bot_name,
         start_game_runner=True,
-        runs=256,
+        runs=128,
         threads=8,
         timeout=9999,
     )

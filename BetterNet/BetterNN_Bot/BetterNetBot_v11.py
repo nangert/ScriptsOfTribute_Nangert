@@ -98,7 +98,9 @@ class BetterNetBot_v11(BaseAI):
         """
         if not available_patrons:
             raise ValueError("No available patrons to select from.")
-        return random.choice(available_patrons)
+        patron = random.choice(available_patrons)
+        self.summary_stats["chosen_patrons"].append(patron.value)
+        return patron
 
     def play(
         self,

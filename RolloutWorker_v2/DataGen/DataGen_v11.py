@@ -18,7 +18,7 @@ MODEL_PREFIX = "better_net_v11_"
 BASE_FILENAME = 'BetterNet_v11_buffer'
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 256
 THREADS = 8
 
 # Directories for logging
@@ -83,6 +83,7 @@ def main() -> None:
             )
             worker.run()
 
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
@@ -95,6 +96,7 @@ def main() -> None:
             )
             worker.run()
 
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             opponent_model_path = select_osfp_opponent()
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
