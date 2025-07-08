@@ -24,8 +24,8 @@ class BetterNetV13(nn.Module):
         # Feature dimensions
         # ----------------------------
         self.move_feat_dim = MOVE_FEAT_DIM
-        self.current_player_dim = 11
-        self.enemy_player_dim = 8
+        self.current_player_dim = 8
+        self.enemy_player_dim = 6
         # 10 patrons * 2 because player (bot) chooses 2 patrons at start of game
         self.patron_dim = 10 * 2
         # card embedding size 11 (6 from card type + 5 from basic features
@@ -83,7 +83,7 @@ class BetterNetV13(nn.Module):
         # ----------------------------
         # We will concatenate (player, patron, tavern) → 3*hidden_dim, then fuse to hidden_dim
         self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim * 6, hidden_dim),
+            nn.Linear(hidden_dim * 8, hidden_dim),
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
@@ -161,7 +161,9 @@ class BetterNetV13(nn.Module):
             tav_avail_attn = tav_avail_attn.view(B, T, -1)
 
             hand_enc = embed_mean("hand", B, T)
-            played_enc = embed_mean("played", B, T)
+            known_enc = embed_mean("known", B, T)
+            agents_enc = embed_mean("agents", B, T)
+            opp_agents_enc = embed_mean("opp_agents", B, T)
 
             context = self.fusion(torch.cat([
                 cur_encoded,
@@ -169,7 +171,9 @@ class BetterNetV13(nn.Module):
                 patron_encoded,
                 tav_avail_attn,
                 hand_enc,
-                played_enc,
+                known_enc,
+                agents_enc,
+                opp_agents_enc
             ], dim=-1))
 
             lstm_out, _ = self.lstm(context)
@@ -196,7 +200,9 @@ class BetterNetV13(nn.Module):
             ).view(B, 1, -1)
 
             hand_enc = embed_mean("hand", B, 1)
-            played_enc = embed_mean("played", B, 1)
+            known_enc = embed_mean("known", B, 1)
+            agents_enc = embed_mean("agents", B, 1)
+            opp_agents_enc = embed_mean("opp_agents", B, 1)
 
             context = self.fusion(torch.cat([
                 cur_encoded,
@@ -204,7 +210,9 @@ class BetterNetV13(nn.Module):
                 patron_encoded,
                 tav_avail_attn,
                 hand_enc,
-                played_enc,
+                known_enc,
+                agents_enc,
+                opp_agents_enc
             ], dim=-1))
 
             lstm_out, new_hidden = self.lstm(context, hidden)
@@ -221,4 +229,3 @@ class BetterNetV13(nn.Module):
             raise ValueError(
                 f"Unexpected move_tensor.dim()={move_tensor.dim()}; expected 3 or 4."
             )
-

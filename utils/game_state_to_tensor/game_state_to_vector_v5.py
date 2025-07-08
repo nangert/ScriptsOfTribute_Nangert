@@ -109,7 +109,7 @@ def game_state_to_tensor_dict_v5(gs: GameState) -> dict[str, torch.Tensor | Tupl
     obs["tavern_available_ids"], obs["tavern_available_feats"] = cards_to_tensor_pair(gs.tavern_available_cards)
     obs["hand_ids"], obs["hand_feats"] = cards_to_tensor_pair(cur.hand)
     obs["known_ids"], obs["known_feats"] = cards_to_tensor_pair(cur.known_upcoming_draws)
-    obs["agents"], obs["agents_feats"] = agents_to_tensor(cur.agents)
-    obs["opp_agents"], obs["opp_agents_feats"] = agents_to_tensor(opp.agents)
+    obs["agents_ids"], obs["agents_feats"] = agents_to_tensor(cur.agents)
+    obs["opp_agents_ids"], obs["opp_agents_feats"] = agents_to_tensor(opp.agents)
 
     return obs
