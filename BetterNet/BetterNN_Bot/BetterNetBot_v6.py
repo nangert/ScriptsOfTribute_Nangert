@@ -12,8 +12,8 @@ from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
 from BetterNet.BetterNN.BetterNet_v6 import BetterNetV6
-from utils.game_state_to_tensor.game_state_to_vector_v3 import game_state_to_tensor_dict_v3
-from utils.move_to_tensor.move_to_metadata import move_to_metadata
+from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v3 import game_state_to_tensor_dict_v3
+from BetterNet.utils.move_to_tensor.move_to_metadata import move_to_metadata
 
 class BetterNetBot_v6(BaseAI):
     """

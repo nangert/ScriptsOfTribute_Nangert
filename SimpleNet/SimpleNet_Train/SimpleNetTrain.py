@@ -9,7 +9,7 @@ from scripts_of_tribute.game import Game
 from RandomBot.RandomBot import RandomBot
 from SimpleNet.SimpleNN.SimpleNet import SimpleNet
 from SimpleNet.SimpleNet_Bot.SimpleNetBot import NNBot
-from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
+from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
 
 
 def train_one_game(model, optimizer):

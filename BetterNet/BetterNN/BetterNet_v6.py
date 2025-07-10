@@ -7,7 +7,7 @@ from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
 from BetterNet.BetterNN.CardEmbedding import CardEmbedding
 from BetterNet.BetterNN.PatronEmbedding import PatronEmbedding
 from BetterNet.BetterNN.EffectsEmbedding import EffectsEmbedding
-from utils.move_to_tensor.move_to_tensor_v2 import MOVE_FEAT_DIM
+from BetterNet.utils.move_to_tensor.move_to_tensor_v2 import MOVE_FEAT_DIM
 
 
 class BetterNetV6(nn.Module):

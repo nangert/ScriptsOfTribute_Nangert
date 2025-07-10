@@ -4,7 +4,7 @@ from typing import Dict, Tuple
 
 from BetterNet.BetterNN.ResidualMLP import ResidualMLP
 from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
-from utils.move_to_tensor.move_to_tensor_v1 import MOVE_FEAT_DIM
+from BetterNet.utils.move_to_tensor.move_to_tensor_v1 import MOVE_FEAT_DIM
 
 class BetterNetV4(nn.Module):
     def __init__(self, hidden_dim: int = 128, num_moves: int = 10) -> None:

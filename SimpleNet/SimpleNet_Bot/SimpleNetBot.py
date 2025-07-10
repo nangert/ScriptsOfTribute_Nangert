@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from typing import List
 
-from utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
+from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v1 import game_state_to_tensor_dict_v1
 
 
 class NNBot(BaseAI):

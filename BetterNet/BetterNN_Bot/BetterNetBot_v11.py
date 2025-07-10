@@ -13,8 +13,8 @@ from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
 from BetterNet.BetterNN.BetterNet_v11 import BetterNetV11
-from utils.game_state_to_tensor.game_state_to_vector_v4 import game_state_to_tensor_dict_v4
-from utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
+from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v4 import game_state_to_tensor_dict_v4
+from BetterNet.utils.move_to_tensor.move_to_tensor_v1 import move_to_tensor, MOVE_FEAT_DIM
 
 MODEL_VERSION = '_v11_buffer_'
 SUMMARY_DIR = Path("game_summaries")

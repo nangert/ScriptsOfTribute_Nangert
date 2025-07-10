@@ -5,7 +5,7 @@ from typing import Dict, Tuple
 from BetterNet.BetterNN.ResidualMLP import ResidualMLP
 from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
 from BetterNet.BetterNN.CardEmbedding import CardEmbedding
-from utils.move_to_tensor.move_to_tensor_v1 import MOVE_FEAT_DIM
+from BetterNet.utils.move_to_tensor.move_to_tensor_v1 import MOVE_FEAT_DIM
 
 
 class BetterNetV5(nn.Module):

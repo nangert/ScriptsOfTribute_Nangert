@@ -1,23 +1,9 @@
 ﻿from scripts_of_tribute.game import Game
-import torch
 from pathlib import Path
 
-from BetterNet.BetterNN.BetterNet_v3 import BetterNetV3
-from BetterNet.BetterNN_Bot.BetterNetBot_v10 import BetterNetBot_v10
-from BetterNet.BetterNN_Bot.BetterNetBot_v11 import BetterNetBot_v11
-from BetterNet.BetterNN_Bot.BetterNetBot_v12 import BetterNetBot_v12
 from BetterNet.BetterNN_Bot.BetterNetBot_v13 import BetterNetBot_v13
-from BetterNet.BetterNN_Bot.BetterNetBot_v2 import BetterNetBot_v2
-from BetterNet.BetterNN_Bot.BetterNetBot_v3 import BetterNetBot_v3
-from BetterNet.BetterNN.BetterNet_v2 import BetterNetV2
-from BetterNet.BetterNN_Bot.BetterNetBot_v4 import BetterNetBot_v4
-from BetterNet.BetterNN_Bot.BetterNetBot_v5 import BetterNetBot_v5
-from BetterNet.BetterNN_Bot.BetterNetBot_v6 import BetterNetBot_v6
-from BetterNet.BetterNN_Bot.BetterNetBot_v7 import BetterNetBot_v7
-from BetterNet.BetterNN_Bot.BetterNetBot_v8 import BetterNetBot_v8
-from BetterNet.BetterNN_Bot.BetterNetBot_v9 import BetterNetBot_v9
 from RandomBot.RandomBot import RandomBot
-from utils.model_versioning import get_latest_model_path
+from BetterNet.utils.model_versioning import get_latest_model_path
 
 MODEL_DIR = Path("saved_models")
 MODEL_PREFIX = "better_net_v"
