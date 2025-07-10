@@ -25,12 +25,13 @@ MODEL_PREFIX = "better_net_v"
 def main():
     primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
 
-    bot1_path = Path('./good_models/BetterNet_v13/better_net_v13_17.pt')
-    bot2_path = Path('./good_models/BetterNet_v13/better_net_v13_21.pt')
+    #bot1_path = Path('./good_models/BetterNet_v12/better_net_v12_21.pt')
+    bot1_path = Path('./good_models/BetterNet_v13/better_net_v13_19.pt')
+    bot2_path = Path('./good_models/BetterNet_v13/better_net_v13_19.pt')
 
     bot1 = BetterNetBot_v13(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
-    bot2 = BetterNetBot_v13(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
-    #bot2 = RandomBot(bot_name="RandomBot")
+    #bot2 = BetterNetBot_v13(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
+    bot2 = RandomBot(bot_name="RandomBot")
 
     game = Game()
     game.register_bot(bot1)
@@ -41,8 +42,8 @@ def main():
         bot1.bot_name,
         bot2.bot_name,
         start_game_runner=True,
-        runs=128,
-        threads=8,
+        runs=1,
+        threads=1,
         timeout=9999,
     )
 
@@ -55,7 +56,7 @@ def main():
         #"Sakkirin",
         bot1.bot_name,
         start_game_runner=True,
-        runs=128,
+        runs=256,
         threads=8,
         timeout=9999,
     )

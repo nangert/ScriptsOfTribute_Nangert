@@ -18,7 +18,7 @@ MODEL_PREFIX = "better_net_v13_"
 BASE_FILENAME = 'BetterNet_v13_buffer'
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 128
 THREADS = 8
 
 # Directories for logging

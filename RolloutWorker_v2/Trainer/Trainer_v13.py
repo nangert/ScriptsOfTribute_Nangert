@@ -5,7 +5,6 @@ from typing import Optional
 import torch
 import torch.optim as optim
 import wandb
-from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from BetterNet.BetterNN.BetterNet_v13 import BetterNetV13
 from ReplayBuffer.ReplayBuffer_v13 import ReplayBuffer_v13
@@ -51,7 +50,6 @@ class Trainer_v13:
 
         # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs * 2)
 
         # Replay buffer
         self.buffer = ReplayBuffer_v13(self.buffer_path)
@@ -59,9 +57,9 @@ class Trainer_v13:
     def train(
             self,
             batch_size: int = 64,
-            clip_eps: float = 0.2,
+            clip_eps: float = 0.007,
             value_coeff: float = 0.5,
-            entropy_coeff: float = 0.01,
+            entropy_coeff: float = 0.02,
     ):
         # 1) Load one batch of B episodes (e.g. B=128) from the buffer
         obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
@@ -157,7 +155,6 @@ class Trainer_v13:
                 # 12) Gradient clipping + step
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
-                self.scheduler.step()
                 self.optimizer.zero_grad()
 
                 if self.wandb_run:

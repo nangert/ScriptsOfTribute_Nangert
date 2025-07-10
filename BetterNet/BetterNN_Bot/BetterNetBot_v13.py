@@ -213,11 +213,15 @@ class BetterNetBot_v13(BaseAI):
         else:
             final_reward = -1.0
 
-        γ = 0.99
-        N = len(self.trajectory)
+        total_turns = len(self.moves_per_turn)
+        turn_indices = []
+        for turn_idx, cnt in enumerate(self.moves_per_turn):
+            turn_indices += [turn_idx] * cnt
 
-        for t, step in enumerate(self.trajectory):
-            discount_multiplier = γ ** (N - 1 - t)
+        γ = 0.99
+        for move_idx, step in enumerate(self.trajectory):
+            turn_idx = turn_indices[move_idx]
+            discount_multiplier = γ ** (total_turns - 1 - turn_idx)
             step["reward"] = final_reward * discount_multiplier
 
         self.summary_stats["finished_at"] = datetime.now(timezone.utc).isoformat()

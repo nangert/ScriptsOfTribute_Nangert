@@ -83,26 +83,26 @@ class BetterNetV13(nn.Module):
         # ----------------------------
         # We will concatenate (player, patron, tavern) → 3*hidden_dim, then fuse to hidden_dim
         self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim * 8, hidden_dim),
+            nn.Linear(hidden_dim * 9, hidden_dim * 4),
             nn.ReLU(),
-            ResidualMLP(hidden_dim, hidden_dim),
+            ResidualMLP(hidden_dim * 4, hidden_dim * 4),
         )
 
         # LSTM: input_size=hidden_dim, hidden_size=256, batch_first=True
         self.lstm = nn.LSTM(
-            input_size=hidden_dim,
+            input_size=hidden_dim * 4,
             hidden_size=256,
             batch_first=True
         )
 
         # Project the 256-dim LSTM hidden state down to hidden_dim=128 so we can dot with move_emb
-        self.policy_proj = nn.Linear(256, hidden_dim)  # [256]→[128]
+        self.policy_proj = nn.Linear(hidden_dim * 2, hidden_dim)  # [256]→[128]
 
         # ----------------------------
         # Output Heads
         # ----------------------------
         # Critic head: from the 128-dim “fusion context” at each timestep to a scalar
-        self.value_head = nn.Linear(hidden_dim, 1)
+        self.value_head = nn.Linear(hidden_dim * 2, 1)
 
         # We do *not* define a policy_head here.  Instead, at inference time, we will:
         #   1) project final LSTM hidden (256→128),
@@ -161,6 +161,7 @@ class BetterNetV13(nn.Module):
             tav_avail_attn = tav_avail_attn.view(B, T, -1)
 
             hand_enc = embed_mean("hand", B, T)
+            played_enc = embed_mean("played", B, T)
             known_enc = embed_mean("known", B, T)
             agents_enc = embed_mean("agents", B, T)
             opp_agents_enc = embed_mean("opp_agents", B, T)
@@ -171,6 +172,7 @@ class BetterNetV13(nn.Module):
                 patron_encoded,
                 tav_avail_attn,
                 hand_enc,
+                played_enc,
                 known_enc,
                 agents_enc,
                 opp_agents_enc
@@ -180,7 +182,7 @@ class BetterNetV13(nn.Module):
 
             # 1f) Critic (value) head uses the *fusion context* (128-dim) at each time:
             #     values: [B, T, 1] → squeeze → [B, T]
-            values = self.value_head(context).squeeze(-1)
+            values = self.value_head(lstm_out).squeeze(-1)
 
             final_hidden_all = self.policy_proj(lstm_out)
 
@@ -200,6 +202,7 @@ class BetterNetV13(nn.Module):
             ).view(B, 1, -1)
 
             hand_enc = embed_mean("hand", B, 1)
+            played_enc = embed_mean("played", B, 1)
             known_enc = embed_mean("known", B, 1)
             agents_enc = embed_mean("agents", B, 1)
             opp_agents_enc = embed_mean("opp_agents", B, 1)
@@ -210,13 +213,14 @@ class BetterNetV13(nn.Module):
                 patron_encoded,
                 tav_avail_attn,
                 hand_enc,
+                played_enc,
                 known_enc,
                 agents_enc,
                 opp_agents_enc
             ], dim=-1))
 
             lstm_out, new_hidden = self.lstm(context, hidden)
-            value = self.value_head(context).squeeze(-1).squeeze(-1)
+            value = self.value_head(lstm_out).squeeze(-1).squeeze(-1)
 
             final_hidden = lstm_out[:, -1, :]
             final_hidden_proj = self.policy_proj(final_hidden)
