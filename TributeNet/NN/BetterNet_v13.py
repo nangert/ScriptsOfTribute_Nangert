@@ -16,7 +16,6 @@ class BetterNetV13(nn.Module):
     def __init__(
         self,
         hidden_dim: int = 128,
-        num_moves: int = 10,
         num_cards: int = 256
     ) -> None:
         super().__init__()
@@ -109,7 +108,6 @@ class BetterNetV13(nn.Module):
         #   2) encode candidate moves (N×D→N×128),
         #   3) dot product → N logits.
 
-        self.num_moves = num_moves
 
     def forward(
             self,

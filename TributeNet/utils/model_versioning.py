@@ -1,30 +1,17 @@
 ﻿from pathlib import Path
 from typing import Optional
+import random
 
-def get_latest_model_path(base_dir: Path, model_prefix: str = "better_net_v", extension: str = ".pt") -> Path:
-    """
-    :return the latest model path in dir with specific prefix
-    """
-    base_dir.mkdir(parents=True, exist_ok=True)
-    existing_models = list(base_dir.glob(f"{model_prefix}*{extension}"))
+OSFP_LATEST_PROB = 0.6
+HISTORY_DEPTH = 5
+MODEL_DIR = Path("saved_models")
 
-    if not existing_models:
-        return base_dir / f"{model_prefix}1{extension}"
+def get_model_version_path(
+        base_dir: Path = Path("saved_models"),
+        prefix: str = "tribute_net_v1",
+        extension: str = ".pt",
+        offset: int = 0) -> Optional[Path]:
 
-    # Extract version numbers and find the highest
-    versions = [
-        int(f.stem.replace(model_prefix, ""))
-        for f in existing_models
-        if f.stem.replace(model_prefix, "").isdigit()
-    ]
-    latest_version = max(versions)
-    return base_dir / f"{model_prefix}{latest_version}{extension}"
-
-def get_model_version_path(base_dir: Path, prefix: str = "better_net_v", extension: str = ".pt", offset: int = 0) -> Optional[Path]:
-    """
-    compared to get_latest_model_path can also handle offset to fest latest models instead of only current one
-    Todo: unify with get_latest_model_path
-    """
     base_dir.mkdir(parents=True, exist_ok=True)
     models = list(base_dir.glob(f"{prefix}*{extension}"))
     if not models:
@@ -44,3 +31,19 @@ def get_model_version_path(base_dir: Path, prefix: str = "better_net_v", extensi
         return None  # Fallback to random bot if no valid older version exists
 
     return base_dir / f"{prefix}{target_version}{extension}"
+
+def select_osfp_opponent() -> Path | None:
+    latest = get_model_version_path(offset=0)
+    if latest is None:
+        return None
+
+    history = [
+        get_model_version_path(offset=i)
+        for i in range(2, HISTORY_DEPTH + 1)
+    ]
+    history = [h for h in history if h is not None]
+
+    if random.random() < OSFP_LATEST_PROB or not history:
+        return latest
+    elif history:
+        return random.choice(history)
