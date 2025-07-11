@@ -16,3 +16,4 @@ dependencies:
     - scripts-of-tribute
     - matplotlib
     - seaborn
+    - torch==2.7.1
