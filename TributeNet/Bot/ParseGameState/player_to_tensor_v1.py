@@ -1,5 +1,7 @@
 ﻿import torch
 
+PLAYER_DIM = 5
+OPPONENT_DIM = 3
 
 def player_to_tensor_v1(player) -> torch.Tensor:
     return torch.Tensor([

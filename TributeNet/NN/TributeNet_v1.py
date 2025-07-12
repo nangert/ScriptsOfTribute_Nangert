@@ -3,10 +3,11 @@
 import torch
 import torch.nn as nn
 
+from TributeNet.Bot.ParseGameState.move_to_tensor_v1 import MOVE_FEAT_DIM
 from TributeNet.Bot.ParseGameState.patrons_to_tensor_v1 import NUM_PATRON_STATES, NUM_PATRONS
+from TributeNet.Bot.ParseGameState.player_to_tensor_v1 import PLAYER_DIM, OPPONENT_DIM
 from TributeNet.NN.ResidualMLP import ResidualMLP
 from TributeNet.NN.TavernSelfAttention import TavernSelfAttention
-
 
 class TributeNetV1(nn.Module):
 
@@ -17,14 +18,20 @@ class TributeNetV1(nn.Module):
     ):
         super().__init__()
 
+        self.move_encoder = nn.Sequential(
+            nn.Linear(MOVE_FEAT_DIM, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
+
         self.player_encoder = nn.Sequential(
-            nn.Linear(self.current_player_dim, hidden_dim),
+            nn.Linear(PLAYER_DIM, hidden_dim),
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
 
         self.opponent_encoder = nn.Sequential(
-            nn.Linear(self.enemy_player_dim, hidden_dim),
+            nn.Linear(OPPONENT_DIM, hidden_dim),
             nn.ReLU(),
             ResidualMLP(hidden_dim, hidden_dim),
         )
@@ -48,7 +55,7 @@ class TributeNetV1(nn.Module):
         self.tavern_available_attention = TavernSelfAttention(hidden_dim, hidden_dim)
 
         self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim * 9, hidden_dim * 4),
+            nn.Linear(hidden_dim * 8, hidden_dim * 4),
             nn.ReLU(),
             ResidualMLP(hidden_dim * 4, hidden_dim * 4),
         )
@@ -77,7 +84,7 @@ class TributeNetV1(nn.Module):
             embedded = self.card_embedding(ids).mean(dim=1)
             return embedded.view(B, T, -1)
 
-        if move_tensor.dim() == 4:
+        if move_tensor.dim() == 3:
             player_encoded = self.player_encoder(obs['player_tensor'])
             opponent_encoded = self.opponent_encoder(obs['opponent_tensor'])
             patron_encoded = self.patron_encoder(obs['patron_tensor']).flatten(start_dim=-2)
@@ -108,24 +115,24 @@ class TributeNetV1(nn.Module):
 
             value = self.value_head(lstm_out).squeeze(-1).squeeze(-1)
 
-            move_emb = self.move_encoder(move_tensor)  # [B, N, 128]
-            logits = torch.bmm(move_emb, final_hidden_proj.unsqueeze(2)).squeeze(2)
+            move_emb = self.move_encoder(move_tensor)
+            logits = torch.bmm(move_emb, final_hidden_proj.unsqueeze(2)).squeeze(0).squeeze(2)
 
             return logits, value
 
-        elif move_tensor.dim() == 3:
-            player_encoded = self.player_encoder(obs['player_tensor']).unsqueeze(1)
-            opponent_encoded = self.opponent_encoder(obs['opponent_tensor']).unsqueeze(1)
-            patron_encoded = self.patron_encoder(obs['patron_tensor']).flatten(start_dim=-2).unsqueeze(1)
+        elif move_tensor.dim() == 2:
+            player_encoded = self.player_encoder(obs['player_tensor'])
+            opponent_encoded = self.opponent_encoder(obs['opponent_tensor'])
+            patron_encoded = self.patron_encoder(obs['patron_tensor'].flatten(start_dim=-2))
 
             tavern_available_embed = self.card_embedding(obs['tavern_available_ids'])
             tavern_attention = self.tavern_available_attention(tavern_available_embed)
 
-            B, _, _ = obs['deck_ids'].shape
-            deck_enc = embed_mean(obs['deck_ids'], B, 1)
-            hand_enc = embed_mean(obs['hand_ids'], B, 1)
-            player_agents_enc = embed_mean(obs['player_agents_ids'], B, 1)
-            opponent_agents_enc = embed_mean(obs['opponent_agents_ids'], B, 1)
+            B, _ = obs['deck_ids'].shape
+            deck_enc = embed_mean(obs['deck_ids'], B, 1).squeeze(1)
+            hand_enc = embed_mean(obs['hand_ids'], B, 1).squeeze(1)
+            player_agents_enc = embed_mean(obs['player_agents_ids'], B, 1).squeeze(1)
+            opponent_agents_enc = embed_mean(obs['opponent_agents_ids'], B, 1).squeeze(1)
 
             context = self.fusion(torch.cat([
                 player_encoded,
@@ -136,16 +143,15 @@ class TributeNetV1(nn.Module):
                 hand_enc,
                 player_agents_enc,
                 opponent_agents_enc
-            ]), dim=-1)
+            ], dim=-1))
 
             lstm_out, new_hidden = self.lstm(context)
-            final_hidden = lstm_out[:, -1, :]
-            final_hidden_proj = self.policy_proj(final_hidden)
+            final_hidden_proj = self.policy_proj(lstm_out)
 
             value = self.value_head(lstm_out).squeeze(-1).squeeze(-1)
 
-            move_emb = self.move_encoder(move_tensor)  # [B, N, 128]
-            logits = torch.bmm(move_emb, final_hidden_proj.unsqueeze(2)).squeeze(2)
+            move_emb = self.move_encoder(move_tensor)
+            logits = torch.bmm(move_emb.unsqueeze(0), final_hidden_proj.unsqueeze(2)).squeeze(1)
 
             return logits, value, new_hidden
 

@@ -31,7 +31,7 @@ class TributeBotV1(BaseAI):
 
         self.model = TributeNetV1(hidden_dim=128)
         self.model_path = get_model_version_path() if use_latest_model else select_osfp_opponent()
-        if self.model_path.exists():
+        if self.model_path and self.model_path.exists():
             self._load_state()
 
         self.model.eval()
@@ -70,19 +70,20 @@ class TributeBotV1(BaseAI):
             padding = [torch.zeros(MOVE_FEAT_DIM) for _ in range(MAX_MOVES - len(move_tensors))]
             padded_move_tensors = move_tensors + padding
 
-        padded_move_tensors = torch.stack(padded_move_tensors, dim=0).unsqueeze(0)
+        padded_move_tensors = torch.stack(padded_move_tensors, dim=0)
 
         with torch.no_grad():
             logits, value, self.hidden = self.model(obs, padded_move_tensors, self.hidden)
 
-        move_probs = torch.softmax(logits, dim=-1)
-        move_probs = move_probs[:len(possible_moves)]
-        move_probs = move_probs / move_probs.sum()
+        move_probs = torch.softmax(logits, dim=-1).flatten()[:len(possible_moves)]
+
+        probs = move_probs.detach().cpu().numpy()
+        probs /= probs.sum()
 
         if self.evaluate:
-            idx = int(move_probs.argmax())
+            idx = int(probs.argmax())
         else:
-            idx = int(np.random.choice(len(move_probs), p=move_probs.cpu().numpy()))
+            idx = int(np.random.choice(len(probs), p=probs))
 
         selected_move = possible_moves[idx]
 

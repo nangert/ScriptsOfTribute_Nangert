@@ -14,7 +14,7 @@ def game_state_to_tensor_v1(game_state: GameState) -> dict[str, torch.Tensor]:
     played_ids = cards_to_tensor_v1(game_state.current_player.played)
     cooldown_ids = cards_to_tensor_v1(game_state.current_player.cooldown_pile)
 
-    deck_ids = torch.stack([draw_pile_ids, hand_ids, played_ids, cooldown_ids])
+    deck_ids = torch.cat([draw_pile_ids, hand_ids, played_ids, cooldown_ids])
 
     obs = {
         "player_tensor": player_to_tensor_v1(game_state.current_player),
