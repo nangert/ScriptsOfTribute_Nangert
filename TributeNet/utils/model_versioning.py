@@ -2,25 +2,24 @@
 from typing import Optional
 import random
 
+from TributeNet.utils.file_locations import MODEL_DIR, MODEL_PREFIX
+
 OSFP_LATEST_PROB = 0.6
 HISTORY_DEPTH = 5
-MODEL_DIR = Path("saved_models")
 
 def get_model_version_path(
-        base_dir: Path = Path("saved_models"),
-        prefix: str = "tribute_net_v1",
         extension: str = ".pt",
         offset: int = 0) -> Optional[Path]:
 
-    base_dir.mkdir(parents=True, exist_ok=True)
-    models = list(base_dir.glob(f"{prefix}*{extension}"))
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    models = list(MODEL_DIR.glob(f"{MODEL_PREFIX}*{extension}"))
     if not models:
         return None
 
     versions = [
-        int(f.stem.replace(prefix, ""))
+        int(f.stem.replace(MODEL_PREFIX, ""))
         for f in models
-        if f.stem.replace(prefix, "").isdigit()
+        if f.stem.replace(MODEL_PREFIX, "").isdigit()
     ]
     if not versions:
         return None
@@ -30,7 +29,7 @@ def get_model_version_path(
     if target_version < 1:
         return None  # Fallback to random bot if no valid older version exists
 
-    return base_dir / f"{prefix}{target_version}{extension}"
+    return MODEL_DIR / f"{MODEL_PREFIX}{target_version}{extension}"
 
 def select_osfp_opponent() -> Path | None:
     latest = get_model_version_path(offset=0)

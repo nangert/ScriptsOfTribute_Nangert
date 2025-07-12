@@ -4,18 +4,17 @@ from pathlib import Path
 from BetterNet.BetterNN_Bot.BetterNetBot_v13 import BetterNetBot_v13
 from RandomBot.RandomBot import RandomBot
 from BetterNet.utils.model_versioning import get_latest_model_path
+from TributeNet.Bot.TributeBotV1 import TributeBotV1
 
 MODEL_DIR = Path("saved_models")
 MODEL_PREFIX = "better_net_v"
 
 def main():
-    primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-
     #bot1_path = Path('./good_models/BetterNet_v12/better_net_v12_21.pt')
     bot1_path = Path('./good_models/BetterNet_v13/better_net_v13_19.pt')
     bot2_path = Path('./good_models/BetterNet_v13/better_net_v13_19.pt')
 
-    bot1 = BetterNetBot_v13(bot1_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
+    bot1 = TributeBotV1(bot_name="BetterNet_1", evaluate=False)
     #bot2 = BetterNetBot_v13(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
     bot2 = RandomBot(bot_name="RandomBot")
 
@@ -30,20 +29,6 @@ def main():
         start_game_runner=True,
         runs=1,
         threads=1,
-        timeout=9999,
-    )
-
-    game = Game()
-    game.register_bot(bot2)
-    game.register_bot(bot1)
-    game.run(
-        bot2.bot_name,
-        #"SOISMCTS",
-        #"Sakkirin",
-        bot1.bot_name,
-        start_game_runner=True,
-        runs=256,
-        threads=8,
         timeout=9999,
     )
 
