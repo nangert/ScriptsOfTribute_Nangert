@@ -14,5 +14,5 @@ class TavernSelfAttention(nn.Module):
             k = self.k(x)  # [B, N, H]
             v = self.v(x)  # [B, N, H]
             attn = torch.softmax(q @ k.transpose(-2, -1) / (k.size(-1) ** 0.5), dim=-1)
-            ctx = (attn @ v).mean(dim=1)  # [B, H]
+            ctx = (attn @ v).mean(dim=-2)  # [B, H]
             return self.out(ctx)  # [B, H]

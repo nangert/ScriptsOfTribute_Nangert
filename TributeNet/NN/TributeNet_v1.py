@@ -84,10 +84,10 @@ class TributeNetV1(nn.Module):
             embedded = self.card_embedding(ids).mean(dim=1)
             return embedded.view(B, T, -1)
 
-        if move_tensor.dim() == 3:
+        if move_tensor.dim() == 4:
             player_encoded = self.player_encoder(obs['player_tensor'])
             opponent_encoded = self.opponent_encoder(obs['opponent_tensor'])
-            patron_encoded = self.patron_encoder(obs['patron_tensor']).flatten(start_dim=-2)
+            patron_encoded = self.patron_encoder(obs['patron_tensor'].flatten(start_dim=-2))
 
             tavern_available_embed = self.card_embedding(obs['tavern_available_ids'])
             tavern_attention = self.tavern_available_attention(tavern_available_embed)
@@ -107,18 +107,14 @@ class TributeNetV1(nn.Module):
                 hand_enc,
                 player_agents_enc,
                 opponent_agents_enc
-            ]), dim=-1)
+            ], dim=-1))
 
             lstm_out, _ = self.lstm(context)
-            final_hidden = lstm_out[:, -1, :]
-            final_hidden_proj = self.policy_proj(final_hidden)
+            final_hidden_proj = self.policy_proj(lstm_out)
 
-            value = self.value_head(lstm_out).squeeze(-1).squeeze(-1)
+            value = self.value_head(lstm_out)
 
-            move_emb = self.move_encoder(move_tensor)
-            logits = torch.bmm(move_emb, final_hidden_proj.unsqueeze(2)).squeeze(0).squeeze(2)
-
-            return logits, value
+            return final_hidden_proj, value
 
         elif move_tensor.dim() == 2:
             player_encoded = self.player_encoder(obs['player_tensor'])

@@ -38,7 +38,7 @@ def select_osfp_opponent() -> Path | None:
 
     history = [
         get_model_version_path(offset=i)
-        for i in range(2, HISTORY_DEPTH + 1)
+        for i in range(1, HISTORY_DEPTH + 1)
     ]
     history = [h for h in history if h is not None]
 

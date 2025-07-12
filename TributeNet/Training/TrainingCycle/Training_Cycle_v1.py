@@ -1,5 +1,4 @@
 ﻿import argparse
-import logging
 import time
 
 from TributeNet.Training.Trainer.Trainer_v1 import Trainer_V1
@@ -7,8 +6,6 @@ from TributeNet.utils.merge_replay_buffers_v1 import merge_replay_buffers_v1
 
 
 def main():
-    logger = logging.getLogger()
-
     parser = argparse.ArgumentParser(
         description="Continuously spin up rollout workers to generate training data."
     )
@@ -47,7 +44,7 @@ def main():
         data = merge_replay_buffers_v1(num_files=args.num_files)
 
         if data is None:
-            logger.warning("No buffer file found. Sleeping...")
+            print("No buffer file found. Sleeping...")
             time.sleep(args.sleep)
             continue
 
