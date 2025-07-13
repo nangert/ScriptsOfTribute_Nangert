@@ -141,7 +141,7 @@ class TributeNetV1(nn.Module):
                 opponent_agents_enc
             ], dim=-1))
 
-            lstm_out, new_hidden = self.lstm(context)
+            lstm_out, new_hidden = self.lstm(context, lstm_hidden)
             final_hidden_proj = self.policy_proj(lstm_out)
 
             value = self.value_head(lstm_out).squeeze(-1).squeeze(-1)

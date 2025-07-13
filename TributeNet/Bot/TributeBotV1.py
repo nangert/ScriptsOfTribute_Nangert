@@ -13,10 +13,10 @@ from scripts_of_tribute.board import GameState, EndGameState
 from scripts_of_tribute.enums import PatronId
 from scripts_of_tribute.move import BasicMove
 
-from TributeNet.Bot.ParseGameState.game_state_to_tensor_v0 import game_state_to_tensor_v0
+from TributeNet.Bot.ParseGameState.game_state_to_tensor_v1 import game_state_to_tensor_v1
 from TributeNet.Bot.ParseGameState.move_to_tensor_v1 import moves_to_tensor_v1, MOVE_FEAT_DIM
-from TributeNet.NN import TributeNet_V0
 from TributeNet.NN.TributeNet_V0 import TributeNetV0
+from TributeNet.NN.TributeNet_v1 import TributeNetV1
 from TributeNet.utils.file_locations import BUFFER_DIR
 from TributeNet.utils.model_versioning import select_osfp_opponent, get_model_version_path
 
@@ -38,7 +38,7 @@ class TributeBotV1(BaseAI):
         self.evaluate = evaluate
         self.save_trajectory_flag = save_trajectory
 
-        self.model = TributeNetV0(hidden_dim=128).to(self.device)
+        self.model = TributeNetV1(hidden_dim=128).to(self.device)
 
         if model_path is not None and model_path.exists():
             self.model_path = model_path
@@ -88,7 +88,7 @@ class TributeBotV1(BaseAI):
 
     def play(self, game_state: GameState, possible_moves: List[BasicMove], remaining_time: int) -> BasicMove:
 
-        obs = game_state_to_tensor_v0(game_state)
+        obs = game_state_to_tensor_v1(game_state)
         obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}
 
         move_tensors = [moves_to_tensor_v1(move, game_state) for move in possible_moves]
@@ -98,7 +98,7 @@ class TributeBotV1(BaseAI):
             padding = [torch.zeros(MOVE_FEAT_DIM) for _ in range(MAX_MOVES - len(move_tensors))]
             padded_move_tensors = move_tensors + padding
 
-        padded_move_tensors = torch.stack(padded_move_tensors, dim=0).unsqueeze(0).to(self.device)
+        padded_move_tensors = torch.stack(padded_move_tensors, dim=0).to(self.device)
 
         with torch.no_grad():
             logits, value, self.hidden = self.model(obs, padded_move_tensors, self.hidden)

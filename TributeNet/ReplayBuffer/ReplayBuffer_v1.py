@@ -20,16 +20,6 @@ class ReplayBuffer_V1:
             "opponent_agents_ids"
         ]
 
-        obs_keys = [
-            "player_tensor", "opponent_tensor", "patron_tensor",
-            "tavern_available_ids", "tavern_available_feats",
-            "hand_ids", "hand_feats",
-            "known_ids", "known_feats",
-            "agents_ids", "agents_feats",
-            "opp_agents_ids", "opp_agents_feats",
-            "played_ids", "played_feats",
-        ]
-
         obs_ep_padded: Dict[str, List[torch.Tensor]] = {k: [] for k in obs_keys}
         obs_padded: Dict[str, List[torch.Tensor]] = {k: [] for k in obs_keys}
         move_tensors_unpadded: List[torch.Tensor] = []

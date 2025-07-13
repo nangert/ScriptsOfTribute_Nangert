@@ -3,7 +3,7 @@
 import torch
 from torch import optim
 
-from TributeNet.NN.TributeNet_V0 import TributeNetV0
+from TributeNet.NN.TributeNet_v1 import TributeNetV1
 from TributeNet.ReplayBuffer.ReplayBuffer_v1 import ReplayBuffer_V1
 from TributeNet.utils.file_locations import MODEL_DIR, MODEL_PREFIX, EXTENSION
 from TributeNet.utils.model_versioning import get_model_version_path
@@ -21,7 +21,7 @@ class Trainer_V1:
         self.lr = lr
         self.epochs = epochs
 
-        self.model = TributeNetV0().to(self.device)
+        self.model = TributeNetV1().to(self.device)
         self.model_path = get_model_version_path()
 
         if self.model_path and self.model_path.exists():
@@ -37,7 +37,7 @@ class Trainer_V1:
 
     def train(
             self,
-            batch_size: int = 32,
+            batch_size: int = 128,
             clip_eps: float = 0.02,
             value_coeff: float = 0.5,
             entropy_coeff: float = 0.05,
