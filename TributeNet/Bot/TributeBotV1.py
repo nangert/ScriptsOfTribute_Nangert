@@ -13,9 +13,10 @@ from scripts_of_tribute.board import GameState, EndGameState
 from scripts_of_tribute.enums import PatronId
 from scripts_of_tribute.move import BasicMove
 
-from TributeNet.Bot.ParseGameState.game_state_to_tensor_v1 import game_state_to_tensor_v1
+from TributeNet.Bot.ParseGameState.game_state_to_tensor_v0 import game_state_to_tensor_v0
 from TributeNet.Bot.ParseGameState.move_to_tensor_v1 import moves_to_tensor_v1, MOVE_FEAT_DIM
-from TributeNet.NN.TributeNet_v1 import TributeNetV1
+from TributeNet.NN import TributeNet_V0
+from TributeNet.NN.TributeNet_V0 import TributeNetV0
 from TributeNet.utils.file_locations import BUFFER_DIR
 from TributeNet.utils.model_versioning import select_osfp_opponent, get_model_version_path
 
@@ -26,19 +27,24 @@ class TributeBotV1(BaseAI):
     def __init__(
             self,
             bot_name: str = "TributeBot",
+            model_path: Path | None = None,
             use_latest_model: bool = True,
             evaluate: bool = True,
             save_trajectory: bool = True,
     ):
         super().__init__(bot_name=bot_name)
-        self.logger = logging.getLogger(self.__class__.__name__)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.evaluate = evaluate
         self.save_trajectory_flag = save_trajectory
 
-        self.model = TributeNetV1(hidden_dim=128).to(self.device)
-        self.model_path = get_model_version_path() if use_latest_model else select_osfp_opponent()
+        self.model = TributeNetV0(hidden_dim=128).to(self.device)
+
+        if model_path is not None and model_path.exists():
+            self.model_path = model_path
+        else:
+            self.model_path = get_model_version_path() if use_latest_model else select_osfp_opponent()
+
         if self.model_path and self.model_path.exists():
             self._load_state()
 
@@ -58,11 +64,9 @@ class TributeBotV1(BaseAI):
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=self.device)
             self.model.load_state_dict(state)
-            self.logger.info("Loaded %s model from %s", self.model_path.name, self.model_path)
+            print(f"Loaded {self.model_path.name} model from { self.model_path}")
         else:
-            self.logger.warning(
-                "No %s model found at %s; using random initialization.", self.model_path.name, self.model_path
-            )
+            print(f"No {self.model_path.name} model found at {self.model_path}; using random initialization.")
 
     def pregame_prepare(self):
         self.trajectory = []
@@ -84,7 +88,7 @@ class TributeBotV1(BaseAI):
 
     def play(self, game_state: GameState, possible_moves: List[BasicMove], remaining_time: int) -> BasicMove:
 
-        obs = game_state_to_tensor_v1(game_state)
+        obs = game_state_to_tensor_v0(game_state)
         obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}
 
         move_tensors = [moves_to_tensor_v1(move, game_state) for move in possible_moves]
@@ -94,7 +98,7 @@ class TributeBotV1(BaseAI):
             padding = [torch.zeros(MOVE_FEAT_DIM) for _ in range(MAX_MOVES - len(move_tensors))]
             padded_move_tensors = move_tensors + padding
 
-        padded_move_tensors = torch.stack(padded_move_tensors, dim=0).to(self.device)
+        padded_move_tensors = torch.stack(padded_move_tensors, dim=0).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
             logits, value, self.hidden = self.model(obs, padded_move_tensors, self.hidden)
