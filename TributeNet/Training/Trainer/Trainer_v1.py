@@ -37,10 +37,10 @@ class Trainer_V1:
 
     def train(
             self,
-            batch_size: int = 128,
-            clip_eps: float = 0.02,
+            batch_size: int = 64,
+            clip_eps: float = 0.2,
             value_coeff: float = 0.5,
-            entropy_coeff: float = 0.05,
+            entropy_coeff: float = 0.02,
     ):
         obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
             self.batch_data.get_all()

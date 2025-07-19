@@ -103,12 +103,22 @@ def game_state_to_tensor_dict_v6(gs: GameState) -> dict[str, torch.Tensor | Tupl
         "patron_tensor": patron_states_to_tensor(gs.patron_states),
     }
 
+    draw_pile_ids, draw_pile_feats = cards_to_tensor_pair(cur.draw_pile)
+    hand_ids, hand_feats = cards_to_tensor_pair(cur.hand)
+    played_ids, played_feats = cards_to_tensor_pair(cur.played)
+    cooldown_ids, cooldown_feats = cards_to_tensor_pair(cur.cooldown_pile)
+    agents_ids, agents_feats = agents_to_tensor(cur.agents)
+
+    deck_ids = torch.cat([draw_pile_ids, hand_ids, played_ids, cooldown_ids, agents_ids])
+    deck_feats = torch.cat([draw_pile_feats, hand_feats, played_feats, cooldown_feats, agents_feats])
+
     # Dynamic-length card lists (ID + scalar features)
     obs["tavern_available_ids"], obs["tavern_available_feats"] = cards_to_tensor_pair(gs.tavern_available_cards)
-    obs["hand_ids"], obs["hand_feats"] = cards_to_tensor_pair(cur.hand)
-    obs["played_ids"], obs["played_feats"] = cards_to_tensor_pair(cur.played)
+    obs["hand_ids"], obs["hand_feats"] = hand_ids, hand_feats
+    obs["played_ids"], obs["played_feats"] = played_ids, played_feats
     obs["known_ids"], obs["known_feats"] = cards_to_tensor_pair(cur.known_upcoming_draws)
-    obs["agents_ids"], obs["agents_feats"] = agents_to_tensor(cur.agents)
+    obs["agents_ids"], obs["agents_feats"] = agents_ids, agents_feats
     obs["opp_agents_ids"], obs["opp_agents_feats"] = agents_to_tensor(opp.agents)
+    obs["deck_ids"], obs["deck_feats"] = deck_ids, deck_feats
 
     return obs

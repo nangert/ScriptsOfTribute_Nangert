@@ -18,7 +18,7 @@ MODEL_PREFIX = "better_net_v14_"
 BASE_FILENAME = 'BetterNet_v14_buffer'
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 128
 THREADS = 8
 
 # Directories for logging
@@ -37,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger("DataGeneration")
 
 OSFP_LATEST_PROB = 0.0
-HISTORY_DEPTH = 5
+HISTORY_DEPTH = 10
 
 def select_osfp_opponent() -> Path | None:
     latest = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)

@@ -50,6 +50,7 @@ class ReplayBuffer_v14:
             "agents_ids", "agents_feats",
             "opp_agents_ids", "opp_agents_feats",
             "played_ids", "played_feats",
+            "deck_ids", "deck_feats",
         ]
         obs_unpadded: Dict[str, List[torch.Tensor]] = {k: [] for k in obs_keys}
         move_tensors_unpadded: List[torch.Tensor] = []
