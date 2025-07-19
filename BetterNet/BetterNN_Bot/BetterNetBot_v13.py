@@ -15,6 +15,7 @@ from scripts_of_tribute.board import EndGameState
 from BetterNet.BetterNN.BetterNet_v13 import BetterNetV13
 from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v5 import game_state_to_tensor_dict_v5
 from BetterNet.utils.move_to_tensor.move_to_tensor_v3 import move_to_tensor_v3, MOVE_FEAT_DIM
+from TributeNet.utils.file_locations import WHITELISTED_PATRONS
 
 MODEL_VERSION = '_v13_buffer_'
 SUMMARY_DIR = Path("game_summaries")
@@ -95,9 +96,15 @@ class BetterNetBot_v13(BaseAI):
         For now always select first available patron
         Todo: Add Patron selection as own stage to NN
         """
-        if not available_patrons:
+        if available_patrons:
+            candidates = [p for p in available_patrons if p in WHITELISTED_PATRONS]
+            if candidates:
+                patron = random.choice(candidates)
+            else:
+                patron = random.choice(available_patrons)
+        else:
             raise ValueError("No available patrons to select from.")
-        patron = random.choice(available_patrons)
+
         self.summary_stats["chosen_patrons"].append(patron.value)
         return patron
 

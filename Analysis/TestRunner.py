@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from BetterNet.BetterNN_Bot.BetterNetBot_v13 import BetterNetBot_v13
+from RandomBot.BaselineBot import BaselineBot
 from RandomBot.RandomBot import RandomBot
 from BetterNet.utils.model_versioning import get_latest_model_path
 from TributeNet.Bot.TributeBotV1 import TributeBotV1
@@ -14,9 +15,10 @@ def main():
     bot1_path = Path('./good_models/TributeNet_v1/tribute_net_v24.pt')
     bot2_path = Path('./good_models/BetterNet_v13/better_net_v13_19.pt')
 
-    bot1 = TributeBotV1(bot_name="TributeNet_1", evaluate=True, model_path=bot1_path, save_trajectory=False)
-    bot2 = BetterNetBot_v13(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
+    #bot1 = TributeBotV1(bot_name="TributeNet_1", evaluate=True, model_path=bot1_path, save_trajectory=False)
+    bot1 = BetterNetBot_v13(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
     #bot2 = RandomBot(bot_name="RandomBot")
+    bot2 = BaselineBot(bot_name="Kakabot")
 
     game = Game()
     game.register_bot(bot1)
@@ -27,7 +29,7 @@ def main():
         bot1.bot_name,
         bot2.bot_name,
         start_game_runner=True,
-        runs=128,
+        runs=64,
         threads=8,
         timeout=9999,
     )
@@ -36,12 +38,12 @@ def main():
     game.register_bot(bot2)
     game.register_bot(bot1)
     game.run(
-        # "SOISMCTS",
         # "Sakkirin",
         bot2.bot_name,
         bot1.bot_name,
+        #"SOISMCTS",
         start_game_runner=True,
-        runs=128,
+        runs=64,
         threads=8,
         timeout=9999,
     )
