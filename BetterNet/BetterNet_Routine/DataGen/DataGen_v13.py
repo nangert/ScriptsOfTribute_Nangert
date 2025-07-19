@@ -3,7 +3,7 @@ import random
 from datetime import datetime
 from pathlib import Path
 
-from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v13 import RolloutWorker_v13
+from BetterNet.BetterNet_Routine.RolloutWorker.RolloutWorkerv_v13 import RolloutWorker_v13
 from BetterNet.utils.merge_game_summaries import merge_game_summaries
 from BetterNet.utils.merge_replay_buffers import merge_replay_buffers
 from BetterNet.utils.model_versioning import get_latest_model_path, get_model_version_path

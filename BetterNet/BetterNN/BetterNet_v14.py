@@ -55,7 +55,11 @@ class BetterNetV14(nn.Module):
         )
 
         # Patron Encoder, Input head for selected Patrons (One-hot encoding of selected patrons)
-        self.patron_owner_embedding = PatronOwnerEmbedding(hidden_dim=128)
+        self.patron_encoder = nn.Sequential(
+            nn.Linear(self.patron_dim, hidden_dim),
+            nn.ReLU(),
+            ResidualMLP(hidden_dim, hidden_dim),
+        )
 
         # Shared card embedding
         self.card_embedding = CardEmbedding(num_cards=num_cards, embed_dim=hidden_dim, scalar_feat_dim=3)
@@ -143,7 +147,7 @@ class BetterNetV14(nn.Module):
         if move_tensor.dim() == 4:
             cur_encoded = self.cur_player_encoder(obs["current_player"])
             opp_encoded = self.enemy_player_encoder(obs["enemy_player"])
-            patron_encoded = self.patron_owner_embedding(obs["patron_tensor"])
+            patron_encoded = self.patron_encoder(obs["patron_tensor"].flatten(start_dim=-2))
 
             B, T, N = obs["tavern_available_ids"].shape
             tav_avail = self.card_embedding(
@@ -190,7 +194,7 @@ class BetterNetV14(nn.Module):
             # 1) Prepare player_obs, patron_obs, tavern_obs with a “time” axis
             cur_encoded = self.cur_player_encoder(obs["current_player"]).unsqueeze(1)
             opp_encoded = self.enemy_player_encoder(obs["enemy_player"]).unsqueeze(1)
-            patron_encoded = self.patron_owner_embedding(obs["patron_tensor"]).unsqueeze(1)
+            patron_encoded = self.patron_encoder(obs["patron_tensor"].flatten(start_dim=-2)).unsqueeze(1)
 
             tav_avail_attn = self.tavern_available_attention(
                 self.card_embedding(obs["tavern_available_ids"], obs["tavern_available_feats"])

@@ -8,7 +8,7 @@ import re
 import torch
 import wandb
 
-from RolloutWorker_v2.Trainer.Trainer_v13 import Trainer_v13
+from BetterNet.BetterNet_Routine.Trainer.Trainer_v13 import Trainer_v13
 from BetterNet.utils.model_versioning import get_latest_model_path
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
