@@ -2,13 +2,17 @@
 import pickle
 from typing import List
 import uuid
+from pathlib import Path
 
 from typing_extensions import Optional
 
 from TributeNet.utils.file_locations import BUFFER_DIR, USED_BUFFER_DIR
 
 
-def merge_replay_buffers_v1(num_files: int = 64) -> Optional[List]:
+def merge_replay_buffers_v1(
+        num_files: int = 64
+
+) -> Optional[List]:
     USED_BUFFER_DIR.mkdir(parents=True, exist_ok=True)
 
     episodes = sorted(BUFFER_DIR.glob("*.pkl"), key=lambda p: p.stat().st_mtime)

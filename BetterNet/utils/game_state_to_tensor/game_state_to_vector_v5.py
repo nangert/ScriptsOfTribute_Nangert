@@ -83,7 +83,7 @@ def patron_states_to_tensor(states) -> torch.Tensor:
             tensor[i][1] = 1.0
     return tensor
 
-def agents_to_tensor(agents) -> torch.Tensor:
+def agents_to_tensor(agents) -> Tuple[torch.Tensor, torch.Tensor]:
     agent_cards = []
     for agent in agents:
         agent_cards.append(agent.representing_card)

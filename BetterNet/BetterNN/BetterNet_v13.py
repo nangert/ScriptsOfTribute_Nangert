@@ -16,7 +16,6 @@ class BetterNetV13(nn.Module):
     def __init__(
         self,
         hidden_dim: int = 128,
-        num_moves: int = 10,
         num_cards: int = 256
     ) -> None:
         super().__init__()
@@ -64,17 +63,6 @@ class BetterNetV13(nn.Module):
         # Shared card embedding
         self.card_embedding = CardEmbedding(num_cards=num_cards, embed_dim=hidden_dim, scalar_feat_dim=3)
 
-        # Shared patron embedding
-        self.patron_embedding = PatronEmbedding(num_patrons=10, embed_dim=hidden_dim)
-
-        # Shared Effects embedding
-        self.effects_embedding = EffectsEmbedding(embed_dim=hidden_dim)
-
-        # Tavern Encoder, Input head for current state of tavern, Encodes all cards currently in the tavern
-        self.tavern_encoder = nn.Sequential(
-            nn.Linear(self.card_dim, hidden_dim),
-            nn.ReLU(),
-        )
         self.tavern_available_attention = TavernSelfAttention(hidden_dim, hidden_dim)
         # TavernSelfAttention: if input is [B, N, D], returns [B, H].
 
@@ -109,7 +97,6 @@ class BetterNetV13(nn.Module):
         #   2) encode candidate moves (N×D→N×128),
         #   3) dot product → N logits.
 
-        self.num_moves = num_moves
 
     def forward(
             self,

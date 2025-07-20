@@ -1,7 +1,10 @@
 ﻿import argparse
 import time
+from pathlib import Path
 
 from TributeNet.Training.Trainer.Trainer_v1 import Trainer_V1
+from TributeNet.utils.file_locations import SUMMARY_DIR, MERGED_SUMMARY_DIR, USED_SUMMARY_DIR
+from TributeNet.utils.merge_game_summaries import merge_game_summaries
 from TributeNet.utils.merge_replay_buffers_v1 import merge_replay_buffers_v1
 
 
@@ -47,6 +50,13 @@ def main():
             print("No buffer file found. Sleeping...")
             time.sleep(args.sleep)
             continue
+
+        merge_game_summaries(
+            summary_dir=SUMMARY_DIR,
+            merged_summary_dir=MERGED_SUMMARY_DIR,
+            used_summary_dir=USED_SUMMARY_DIR,
+            base_filename="TributeNet_summary"
+        )
 
         trainer = Trainer_V1(raw_data=data, epochs=args.epochs, lr=args.lr)
         trainer.train()

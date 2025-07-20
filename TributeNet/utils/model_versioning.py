@@ -2,10 +2,13 @@
 from typing import Optional
 import random
 
+from click import Tuple
+from sympy.logic.boolalg import Boolean
+
 from TributeNet.utils.file_locations import MODEL_DIR, MODEL_PREFIX
 
 OSFP_LATEST_PROB = 0.6
-HISTORY_DEPTH = 5
+HISTORY_DEPTH = 10
 
 def get_model_version_path(
         extension: str = ".pt",
@@ -31,10 +34,10 @@ def get_model_version_path(
 
     return MODEL_DIR / f"{MODEL_PREFIX}{target_version}{extension}"
 
-def select_osfp_opponent() -> Path | None:
+def select_osfp_opponent():
     latest = get_model_version_path(offset=0)
     if latest is None:
-        return None
+        return None, False
 
     history = [
         get_model_version_path(offset=i)
@@ -43,6 +46,6 @@ def select_osfp_opponent() -> Path | None:
     history = [h for h in history if h is not None]
 
     if random.random() < OSFP_LATEST_PROB or not history:
-        return latest
+        return latest, True
     elif history:
-        return random.choice(history)
+        return random.choice(history), False

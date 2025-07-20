@@ -80,7 +80,7 @@ class BetterNetV14(nn.Module):
         # ----------------------------
         # We will concatenate (player, patron, tavern) → 3*hidden_dim, then fuse to hidden_dim
         self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim * 10, hidden_dim * 4),
+            nn.Linear(hidden_dim * 9, hidden_dim * 4),
             nn.ReLU(),
             ResidualMLP(hidden_dim * 4, hidden_dim * 4),
         )
@@ -162,7 +162,7 @@ class BetterNetV14(nn.Module):
             known_enc = embed_mean("known", B, T)
             agents_enc = embed_mean("agents", B, T)
             opp_agents_enc = embed_mean("opp_agents", B, T)
-            deck_enc = embed_mean("deck", B, T)
+            #deck_enc = embed_mean("deck", B, T)
 
             context = self.fusion(torch.cat([
                 cur_encoded,
@@ -174,7 +174,7 @@ class BetterNetV14(nn.Module):
                 known_enc,
                 agents_enc,
                 opp_agents_enc,
-                deck_enc
+                #deck_
             ], dim=-1))
 
             lstm_out, _ = self.lstm(context)
@@ -205,7 +205,7 @@ class BetterNetV14(nn.Module):
             known_enc = embed_mean("known", B, 1)
             agents_enc = embed_mean("agents", B, 1)
             opp_agents_enc = embed_mean("opp_agents", B, 1)
-            deck_enc = embed_mean("deck", B, 1)
+            #deck_enc = embed_mean("deck", B, 1)
 
             context = self.fusion(torch.cat([
                 cur_encoded,
@@ -217,7 +217,7 @@ class BetterNetV14(nn.Module):
                 known_enc,
                 agents_enc,
                 opp_agents_enc,
-                deck_enc
+                #deck_enc
             ], dim=-1))
 
             lstm_out, new_hidden = self.lstm(context, hidden)

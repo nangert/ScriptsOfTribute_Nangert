@@ -85,7 +85,7 @@ def patron_states_to_tensor(states) -> torch.Tensor:
             tensor[i][2] = 1.0
     return tensor
 
-def agents_to_tensor(agents) -> torch.Tensor:
+def agents_to_tensor(agents) -> Tuple[torch.Tensor, torch.Tensor]:
     agent_cards = []
     for agent in agents:
         agent_cards.append(agent.representing_card)
@@ -119,6 +119,6 @@ def game_state_to_tensor_dict_v6(gs: GameState) -> dict[str, torch.Tensor | Tupl
     obs["known_ids"], obs["known_feats"] = cards_to_tensor_pair(cur.known_upcoming_draws)
     obs["agents_ids"], obs["agents_feats"] = agents_ids, agents_feats
     obs["opp_agents_ids"], obs["opp_agents_feats"] = agents_to_tensor(opp.agents)
-    obs["deck_ids"], obs["deck_feats"] = deck_ids, deck_feats
+    #obs["deck_ids"], obs["deck_feats"] = deck_ids, deck_feats
 
     return obs

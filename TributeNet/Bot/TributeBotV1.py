@@ -2,11 +2,11 @@
 from pathlib import Path
 from typing import List
 import torch
-import logging
 import numpy as np
 import pickle
 import uuid
 import os
+from datetime import datetime, timezone
 
 from scripts_of_tribute.base_ai import BaseAI
 from scripts_of_tribute.board import GameState, EndGameState
@@ -15,9 +15,8 @@ from scripts_of_tribute.move import BasicMove
 
 from TributeNet.Bot.ParseGameState.game_state_to_tensor_v1 import game_state_to_tensor_v1
 from TributeNet.Bot.ParseGameState.move_to_tensor_v1 import moves_to_tensor_v1, MOVE_FEAT_DIM
-from TributeNet.NN.TributeNet_V0 import TributeNetV0
 from TributeNet.NN.TributeNet_v1 import TributeNetV1
-from TributeNet.utils.file_locations import BUFFER_DIR
+from TributeNet.utils.file_locations import BUFFER_DIR, SUMMARY_DIR, BENCHMARK_DIR
 from TributeNet.utils.model_versioning import select_osfp_opponent, get_model_version_path
 
 MAX_MOVES = 10
@@ -30,20 +29,29 @@ class TributeBotV1(BaseAI):
             model_path: Path | None = None,
             use_latest_model: bool = True,
             evaluate: bool = True,
-            save_trajectory: bool = True,
+            is_benchmark: bool = False,
     ):
         super().__init__(bot_name=bot_name)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.evaluate = evaluate
-        self.save_trajectory_flag = save_trajectory
+        self.save_trajectory_flag = False
+        self.is_benchmark = is_benchmark
 
         self.model = TributeNetV1(hidden_dim=128).to(self.device)
 
         if model_path is not None and model_path.exists():
             self.model_path = model_path
+            self.save_trajectory_flag = False
         else:
-            self.model_path = get_model_version_path() if use_latest_model else select_osfp_opponent()
+            if use_latest_model:
+                path = get_model_version_path()
+                self.model_path = path
+                self.save_trajectory_flag = True
+            else:
+                path, is_latest = select_osfp_opponent()
+                self.model_path = path
+                self.save_trajectory_flag = bool(is_latest)
 
         if self.model_path and self.model_path.exists():
             self._load_state()
@@ -59,6 +67,7 @@ class TributeBotV1(BaseAI):
         self.moves_per_turn: List[int] = []
         self.end_turn_first_count = 0
         self.summary_stats["player"] = None
+        self.summary_stats["model"] = self.model_path.name if self.model_path else "Random"
 
     def _load_state(self):
         if self.model_path.exists():
@@ -78,15 +87,19 @@ class TributeBotV1(BaseAI):
         self.moves_per_turn: List[int] = []
         self.end_turn_first_count = 0
         self.summary_stats["player"] = None
+        self.summary_stats["model"] = None
 
     def select_patron(self, available_patrons: List[PatronId]):
         if not available_patrons:
             raise ValueError("No available patrons")
 
         patron = random.choice(available_patrons)
+        self.summary_stats["chosen_patrons"].append(patron.value)
         return patron
 
     def play(self, game_state: GameState, possible_moves: List[BasicMove], remaining_time: int) -> BasicMove:
+        if self.summary_stats["player"] is None:
+            self.summary_stats["player"] = game_state.current_player.player_id.name
 
         obs = game_state_to_tensor_v1(game_state)
         obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}
@@ -157,8 +170,16 @@ class TributeBotV1(BaseAI):
             discount_multiplier = y ** (total_turns - 1 - turn_idx)
             step["reward"] = reward * discount_multiplier
 
+        self.summary_stats["finished_at"] = datetime.now(timezone.utc).isoformat()
+        self.summary_stats["winner"] = end_game_state.winner
+        self.summary_stats["num_turns"] = len(self.moves_per_turn)
+        self.summary_stats["moves_per_turn"] = self.moves_per_turn
+        self.summary_stats["avg_moves_per_turn"] = np.mean(self.moves_per_turn) if self.moves_per_turn else 0.0
+        self.summary_stats["end_turn_first_count"] = self.end_turn_first_count
+
         if self.save_trajectory_flag:
             self.save_trajectory()
+            self.save_summary_stats()
 
     def save_trajectory(self) -> None:
         BUFFER_DIR.mkdir(parents=True, exist_ok=True)
@@ -174,3 +195,17 @@ class TributeBotV1(BaseAI):
         final_name = tmp_name[:-4]
         final_path = BUFFER_DIR / final_name
         tmp_path.replace(final_path)
+
+    def save_summary_stats(self) -> None:
+        if self.is_benchmark:
+            BENCHMARK_DIR.mkdir(parents=True, exist_ok=True)
+            filename = BENCHMARK_DIR / f"{self.bot_name}{uuid.uuid4().hex}_summary.pkl"
+            with open(filename, "wb") as f:
+                pickle.dump(self.summary_stats, f)
+                f.flush()
+        else:
+            SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
+            filename = SUMMARY_DIR / f"{self.bot_name}{uuid.uuid4().hex}_summary.pkl"
+            with open(filename, "wb") as f:
+                pickle.dump(self.summary_stats, f)
+                f.flush()

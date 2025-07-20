@@ -35,4 +35,15 @@ class RolloutWorker_V1:
             threads=self.num_threads
         )
 
+        game = Game()
+        game.register_bot(bot2)
+        game.register_bot(bot1)
+        game.run(
+            bot2.bot_name,
+            bot1.bot_name,
+            start_game_runner=True,
+            runs=self.num_games,
+            threads=self.num_threads
+        )
+
         self.logger.info("Finished %d games", self.num_games)

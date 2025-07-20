@@ -6,7 +6,9 @@ import torch.nn as nn
 from TributeNet.Bot.ParseGameState.move_to_tensor_v1 import MOVE_FEAT_DIM
 from TributeNet.Bot.ParseGameState.patrons_to_tensor_v1 import NUM_PATRON_STATES, NUM_PATRONS
 from TributeNet.Bot.ParseGameState.player_to_tensor_v1 import PLAYER_DIM, OPPONENT_DIM
+from TributeNet.NN.CardEmbedding import CardEmbedding
 from TributeNet.NN.ResidualMLP import ResidualMLP
+from TributeNet.NN.TavernCrossAttention import TavernCrossAttention
 from TributeNet.NN.TavernSelfAttention import TavernSelfAttention
 
 class TributeNetV1(nn.Module):
@@ -42,20 +44,12 @@ class TributeNetV1(nn.Module):
             ResidualMLP(hidden_dim, hidden_dim),
         )
 
-        self.card_embedding = nn.Embedding(
-            num_embeddings=num_cards,
-            embedding_dim=hidden_dim,
-            padding_idx=None,
-            max_norm=None,
-            norm_type=2.0,
-            scale_grad_by_freq=False,
-            sparse=False
-        )
+        self.card_embedding = CardEmbedding(num_cards=num_cards, embed_dim=hidden_dim, scalar_feat_dim=3)
 
-        self.tavern_available_attention = TavernSelfAttention(hidden_dim, hidden_dim)
+        self.tavern_cross_attn = TavernCrossAttention(dim_in=128, dim_qk=128)
 
         self.fusion = nn.Sequential(
-            nn.Linear(hidden_dim * 8, hidden_dim * 4),
+            nn.Linear(hidden_dim * 9, hidden_dim * 4),
             nn.ReLU(),
             ResidualMLP(hidden_dim * 4, hidden_dim * 4),
         )
@@ -75,13 +69,14 @@ class TributeNetV1(nn.Module):
             move_tensor: torch.Tensor,
             lstm_hidden: Tuple[torch.Tensor, torch.Tensor] = None,
     ):
-        def embed_mean(cardIds, B: int, T: int) -> torch.Tensor:
-            ids = cardIds.view(B * T, -1)
+        def embed_mean(field: str, B: int, T: int) -> torch.Tensor:
+            ids = obs[f"{field}_ids"].view(B * T, -1)
+            feats = obs[f"{field}_feats"].view(B * T, -1, 3)
 
             if ids.size(1) == 0:
                 return torch.zeros(B, T, 128, device=ids.device)
 
-            embedded = self.card_embedding(ids).mean(dim=1)
+            embedded = self.card_embedding(ids, feats).mean(dim=1)  # [B*T, D]
             return embedded.view(B, T, -1)
 
         if move_tensor.dim() == 4:
@@ -89,22 +84,32 @@ class TributeNetV1(nn.Module):
             opponent_encoded = self.opponent_encoder(obs['opponent_tensor'])
             patron_encoded = self.patron_encoder(obs['patron_tensor'].flatten(start_dim=-2))
 
-            tavern_available_embed = self.card_embedding(obs['tavern_available_ids'])
-            tavern_attention = self.tavern_available_attention(tavern_available_embed)
+            B, T, N = obs["tavern_available_ids"].shape
 
-            B, T, _ = obs['deck_ids'].shape
-            deck_enc = embed_mean(obs['deck_ids'], B, T)
-            hand_enc = embed_mean(obs['hand_ids'], B, T)
-            player_agents_enc = embed_mean(obs['player_agents_ids'], B, T)
-            opponent_agents_enc = embed_mean(obs['opponent_agents_ids'], B, T)
+            tavern_available_embed = self.card_embedding(
+                obs["tavern_available_ids"].view(B * T, N),
+                obs["tavern_available_feats"].view(B * T, N, -1)
+            )
+            deck_enc = embed_mean('deck', B, T).view(B*T, 128)
+            deck_enc = deck_enc.view(B * T, 1, -1)
+
+            tavern_attention = self.tavern_cross_attn(tavern_available_embed, deck_enc).view(B, T, -1)
+
+            hand_enc = embed_mean('hand', B, T)
+            player_agents_enc = embed_mean('player_agents', B, T)
+            opponent_agents_enc = embed_mean('opponent_agents', B, T)
+            known_enc = embed_mean('known', B, T)
+            played_enc = embed_mean('played', B, T)
 
             context = self.fusion(torch.cat([
                 player_encoded,
                 opponent_encoded,
                 patron_encoded,
                 tavern_attention,
-                deck_enc,
+                #deck_enc,
                 hand_enc,
+                played_enc,
+                known_enc,
                 player_agents_enc,
                 opponent_agents_enc
             ], dim=-1))
@@ -117,26 +122,32 @@ class TributeNetV1(nn.Module):
             return final_hidden_proj, value
 
         elif move_tensor.dim() == 2:
+
             player_encoded = self.player_encoder(obs['player_tensor'])
             opponent_encoded = self.opponent_encoder(obs['opponent_tensor'])
             patron_encoded = self.patron_encoder(obs['patron_tensor'].flatten(start_dim=-2))
 
-            tavern_available_embed = self.card_embedding(obs['tavern_available_ids'])
-            tavern_attention = self.tavern_available_attention(tavern_available_embed)
+            B, _ = obs['hand_ids'].shape
+            tavern_available_embed = self.card_embedding(obs["tavern_available_ids"], obs["tavern_available_feats"])
+            deck_enc = embed_mean('deck', B, 1).squeeze(1)
 
-            B, _ = obs['deck_ids'].shape
-            deck_enc = embed_mean(obs['deck_ids'], B, 1).squeeze(1)
-            hand_enc = embed_mean(obs['hand_ids'], B, 1).squeeze(1)
-            player_agents_enc = embed_mean(obs['player_agents_ids'], B, 1).squeeze(1)
-            opponent_agents_enc = embed_mean(obs['opponent_agents_ids'], B, 1).squeeze(1)
+            tavern_attention = self.tavern_cross_attn(tavern_available_embed, deck_enc)
+
+            hand_enc = embed_mean('hand', B, 1).squeeze(1)
+            player_agents_enc = embed_mean('player_agents', B, 1).squeeze(1)
+            opponent_agents_enc = embed_mean('opponent_agents', B, 1).squeeze(1)
+            known_enc = embed_mean('known', B, 1).squeeze(1)
+            played_enc = embed_mean('played', B, 1).squeeze(1)
 
             context = self.fusion(torch.cat([
                 player_encoded,
                 opponent_encoded,
                 patron_encoded,
                 tavern_attention,
-                deck_enc,
+                #deck_enc,
                 hand_enc,
+                played_enc,
+                known_enc,
                 player_agents_enc,
                 opponent_agents_enc
             ], dim=-1))

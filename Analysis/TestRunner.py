@@ -13,15 +13,15 @@ MODEL_PREFIX = "better_net_v"
 
 def main():
     #bot1_path = Path('./good_models/BetterNet_v12/better_net_v12_21.pt')
-    bot1_path = Path('./good_models/TributeNet_v1/tribute_net_v24.pt')
+    bot1_path = Path('./good_models/TributeNet_v1/tribute_net_v21.pt')
     bot2_path = Path('./good_models/BetterNet_v13/better_net_v13_19.pt')
     bot14_path = Path('./good_models/BetterNet_v14/better_net_v14_13.pt')
 
-    #bot1 = TributeBotV1(bot_name="TributeNet_1", evaluate=True, model_path=bot1_path, save_trajectory=False)
-    #bot1 = BetterNetBot_v13(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
-    bot1 = BetterNetBot_v14(bot14_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
+    bot2 = TributeBotV1(bot_name="TributeNet_1", evaluate=True, model_path=bot1_path)
+    bot1 = BetterNetBot_v13(bot2_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
+    #bot1 = BetterNetBot_v14(bot14_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
     #bot2 = RandomBot(bot_name="RandomBot")
-    bot2 = BaselineBot(bot_name="Baseline")
+    #bot2 = BaselineBot(bot_name="Baseline")
 
     game = Game()
     game.register_bot(bot1)
