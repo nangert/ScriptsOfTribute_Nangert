@@ -90,8 +90,11 @@ class TributeNetV1(nn.Module):
                 obs["tavern_available_ids"].view(B * T, N),
                 obs["tavern_available_feats"].view(B * T, N, -1)
             )
-            deck_enc = embed_mean('deck', B, T).view(B*T, 128)
-            deck_enc = deck_enc.view(B * T, 1, -1)
+            B, T, N = obs["deck_ids"].shape
+            deck_enc = self.card_embedding(
+                obs["deck_ids"].view(B * T, N),
+                obs["deck_feats"].view(B * T, N, -1)
+            )
 
             tavern_attention = self.tavern_cross_attn(tavern_available_embed, deck_enc).view(B, T, -1)
 
@@ -128,10 +131,13 @@ class TributeNetV1(nn.Module):
             patron_encoded = self.patron_encoder(obs['patron_tensor'].flatten(start_dim=-2))
 
             B, _ = obs['hand_ids'].shape
-            tavern_available_embed = self.card_embedding(obs["tavern_available_ids"], obs["tavern_available_feats"])
-            deck_enc = embed_mean('deck', B, 1).squeeze(1)
+            tavern_available_embed = self.card_embedding(obs["tavern_available_ids"], obs["tavern_available_feats"]).mean(dim=1)
+            deck_emb = self.card_embedding(
+                obs["deck_ids"],
+                obs["deck_feats"],
+            )
 
-            tavern_attention = self.tavern_cross_attn(tavern_available_embed, deck_enc)
+            tavern_attention = self.tavern_cross_attn(tavern_available_embed, deck_emb)
 
             hand_enc = embed_mean('hand', B, 1).squeeze(1)
             player_agents_enc = embed_mean('player_agents', B, 1).squeeze(1)

@@ -24,7 +24,7 @@ def game_state_to_tensor_v1(game_state: GameState) -> dict[str, torch.Tensor]:
     obs = {
         "player_tensor": player_to_tensor_v1(game_state.current_player),
         "opponent_tensor": opponent_to_tensor_v1(game_state.enemy_player),
-        "patron_tensor": patrons_to_tensor_v1(game_state.patron_states),
+        "patron_tensor": patrons_to_tensor_v1(game_state.patron_states, game_state.current_player.player_id),
 
         "tavern_available_ids": tavern_available_ids,
         "tavern_available_feats": tavern_available_feats,

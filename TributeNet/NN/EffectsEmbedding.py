@@ -1,8 +1,7 @@
 ﻿import torch
 import torch.nn as nn
 
-from BetterNet.utils.encode_effects_string.encode_effects_string_v1 import EFFECT_TYPES
-
+from TributeNet.Bot.ParseGameState.encode_effects_string_v1 import EFFECT_TYPES
 
 class EffectsEmbedding(nn.Module):
     def __init__(self, embed_dim: int):

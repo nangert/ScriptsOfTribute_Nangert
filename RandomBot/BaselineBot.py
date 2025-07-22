@@ -33,11 +33,3 @@ class BaselineBot(BaseAI):
     def game_end(self, game_state, final_state):
         """Optional: Handle end-of-game logic."""
         pass
-
-    PatronId.ANSEI
-    PatronId.DUKE_OF_CROWS
-    PatronId.HLAALU
-    PatronId.PELIN
-    PatronId.RAJHIN
-    PatronId.RED_EAGLE
-    PatronId.ORGNUM,

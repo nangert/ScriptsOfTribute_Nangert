@@ -29,7 +29,8 @@ class Benchmark:
             bot2.bot_name,
             start_game_runner=True,
             runs=self.num_games,
-            threads=self.num_threads
+            threads=self.num_threads,
+            timeout=9999
         )
 
         game = Game()

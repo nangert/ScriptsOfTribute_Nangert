@@ -67,7 +67,7 @@ class TributeBotV1(BaseAI):
         self.moves_per_turn: List[int] = []
         self.end_turn_first_count = 0
         self.summary_stats["player"] = None
-        self.summary_stats["model"] = self.model_path.name if self.model_path else "Random"
+        self.summary_stats["model"] = None
 
     def _load_state(self):
         if self.model_path.exists():
@@ -87,7 +87,7 @@ class TributeBotV1(BaseAI):
         self.moves_per_turn: List[int] = []
         self.end_turn_first_count = 0
         self.summary_stats["player"] = None
-        self.summary_stats["model"] = None
+        self.summary_stats["model"] = self.model_path.name if self.model_path else "Random"
 
     def select_patron(self, available_patrons: List[PatronId]):
         if not available_patrons:
@@ -128,15 +128,6 @@ class TributeBotV1(BaseAI):
 
         selected_move = possible_moves[idx]
 
-        self.trajectory.append({
-            "game_state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
-            "move_tensor": padded_move_tensors.squeeze(0).cpu(),
-            "action_idx": idx,
-            "reward": None,
-            "old_log_prob": float(np.log(probs[idx])),
-            "value_estimate": value.item()
-        })
-
         # --- TRACK PER-TURN STATISTICS ---
         self.summary_stats["move"].append(selected_move.command.name)
 
@@ -152,6 +143,15 @@ class TributeBotV1(BaseAI):
             self.moves_per_turn.append(self.current_turn_move_count)
             self.current_turn_move_count = 0
         # --- end tracking ---
+
+        self.trajectory.append({
+            "game_state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
+            "move_tensor": padded_move_tensors.squeeze(0).cpu(),
+            "action_idx": idx,
+            "reward": None,
+            "old_log_prob": float(np.log(probs[idx])),
+            "value_estimate": value.item()
+        })
 
         return selected_move
 

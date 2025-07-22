@@ -28,6 +28,12 @@ def main() -> None:
 
     i = 0
     while True:
+        benchmark = Benchmark(
+            num_games=args.num_games,
+            num_threads=args.num_threads
+        )
+        benchmark.run()
+
         n_pending = len(list(BUFFER_DIR.glob("*.pkl")))
         max_pending = 10 * args.num_games
         if n_pending > max_pending:
@@ -48,8 +54,6 @@ def main() -> None:
                 num_threads=args.num_threads
             )
             benchmark.run()
-
-
 
 if __name__ == '__main__':
     main()
