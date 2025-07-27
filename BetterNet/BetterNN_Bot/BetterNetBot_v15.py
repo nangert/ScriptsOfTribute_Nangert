@@ -12,13 +12,14 @@ from datetime import datetime, timezone
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
-from BetterNet.BetterNN.BetterNet_v13 import BetterNetV13
+from BetterNet.BetterNN.BetterNet_v15 import BetterNetV15
 from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v5 import game_state_to_tensor_dict_v5
 from BetterNet.utils.move_to_tensor.move_to_tensor_v3 import move_to_tensor_v3, MOVE_FEAT_DIM
-from TributeNet.utils.file_locations import WHITELISTED_PATRONS, SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR
+from TributeNet.utils.file_locations import WHITELISTED_PATRONS, SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR, BENCHMARK_DIR
+from TributeNet.utils.model_versioning import get_model_version_path, select_osfp_opponent
 
 
-class BetterNetBot_v13(BaseAI):
+class BetterNetBot_v15(BaseAI):
     """
     Bot that uses a neural network policy to select moves.
     Includes lstm-Layer.
@@ -26,22 +27,37 @@ class BetterNetBot_v13(BaseAI):
 
     def __init__(
         self,
-        model_path: Path,
         bot_name: str = "BetterNet",
-        save_trajectory: bool = True,
+        model_path: Path | None = None,
+        use_latest_model: bool = True,
         evaluate: bool = False,
+        is_benchmark: bool = False,
     ):
         super().__init__(bot_name=bot_name)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model_path = model_path
+        self.is_benchmark = is_benchmark
 
-        model = BetterNetV13(hidden_dim=128, num_moves=10)
-        if self.model_path.exists():
-            self._load_state(model, self.model_path, self.model_path.name)
+        self.model = BetterNetV15(hidden_dim=128, num_moves=10)
+
+        if model_path is not None and model_path.exists():
+            self.model_path = model_path
+            self.save_trajectory_flag = False
         else:
-            self.logger.warning("Primary model not found; using random initialization.")
+            if use_latest_model:
+                path = get_model_version_path()
+                self.model_path = path
+                self.save_trajectory_flag = True
+            else:
+                path, is_latest = select_osfp_opponent()
+                self.model_path = path
+                self.save_trajectory_flag = bool(is_latest)
 
-        self.model = model
+        if self.model_path and self.model_path.exists():
+            self._load_state()
+
         self.model.eval()
 
         self.trajectory: List[dict] = []
@@ -60,22 +76,16 @@ class BetterNetBot_v13(BaseAI):
         self.summary_stats["player"] = None
         self.summary_stats["model"] = None
 
-    def _load_state(
-        self, model: torch.nn.Module, path: Path, name: str
-    ) -> bool:
-        """
-        Helper to load model state dict if available.
-        Returns True if loaded, False otherwise.
-        """
-        if path.exists():
-            state = torch.load(path, map_location="cpu")
-            model.load_state_dict(state)
-            self.logger.info("Loaded %s model from %s", name, path)
-            return True
-        self.logger.warning(
-            "No %s model found at %s; using random initialization.", name, path
-        )
-        return False
+
+    def _load_state(self):
+        if self.model_path.exists():
+            state = torch.load(self.model_path, map_location=self.device)
+            self.model.load_state_dict(state)
+            self.logger.info("Loaded %s model from %s", self.model_path.name, self.model_path)
+        else:
+            self.logger.warning(
+                "No %s model found at %s; using random initialization.", self.model_path.name, self.model_path
+            )
 
     def pregame_prepare(self) -> None:
         """Reset history, trajectory, winner and lstm-hidden-layer before each game."""
@@ -256,8 +266,15 @@ class BetterNetBot_v13(BaseAI):
             f.flush()
 
     def save_summary_stats(self) -> None:
-        SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
-        filename = SUMMARY_DIR / f"{self.bot_name}{MODEL_VERSION}{uuid.uuid4().hex}_summary.pkl"
-        with open(filename, "wb") as f:
-            pickle.dump(self.summary_stats, f)
-            f.flush()
+        if self.is_benchmark:
+            BENCHMARK_DIR.mkdir(parents=True, exist_ok=True)
+            filename = BENCHMARK_DIR / f"{self.bot_name}{uuid.uuid4().hex}_summary.pkl"
+            with open(filename, "wb") as f:
+                pickle.dump(self.summary_stats, f)
+                f.flush()
+        else:
+            SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
+            filename = SUMMARY_DIR / f"{self.bot_name}{uuid.uuid4().hex}_summary.pkl"
+            with open(filename, "wb") as f:
+                pickle.dump(self.summary_stats, f)
+                f.flush()

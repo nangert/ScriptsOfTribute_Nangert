@@ -10,7 +10,7 @@ import shutil
 from TributeNet.utils.file_locations import USED_BUFFER_DIR
 
 
-class ReplayBuffer_v13:
+class ReplayBuffer_v15:
     """
     Loads and prepares training data.
     """

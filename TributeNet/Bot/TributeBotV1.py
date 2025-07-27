@@ -14,6 +14,7 @@ from scripts_of_tribute.enums import PatronId
 from scripts_of_tribute.move import BasicMove
 
 from TributeNet.Bot.ParseGameState.game_state_to_tensor_v1 import game_state_to_tensor_v1
+from TributeNet.Bot.ParseGameState.move_to_metadata_v1 import move_to_metadata
 from TributeNet.Bot.ParseGameState.move_to_tensor_v1 import moves_to_tensor_v1, MOVE_FEAT_DIM
 from TributeNet.NN.TributeNet_v1 import TributeNetV1
 from TributeNet.utils.file_locations import BUFFER_DIR, SUMMARY_DIR, BENCHMARK_DIR
@@ -104,27 +105,34 @@ class TributeBotV1(BaseAI):
         obs = game_state_to_tensor_v1(game_state)
         obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}
 
-        move_tensors = [moves_to_tensor_v1(move, game_state) for move in possible_moves]
-        if len(move_tensors) >= MAX_MOVES:
-            padded_move_tensors = move_tensors[:MAX_MOVES]
-        else:
-            padding = [torch.zeros(MOVE_FEAT_DIM) for _ in range(MAX_MOVES - len(move_tensors))]
-            padded_move_tensors = move_tensors + padding
+        move_metadata = [move_to_metadata(m, game_state) for m in possible_moves]
 
-        padded_move_tensors = torch.stack(padded_move_tensors, dim=0).to(self.device)
+        if len(move_metadata) >= MAX_MOVES:
+            move_metas_padded = move_metadata[:MAX_MOVES]
+        else:
+            pad_meta = {
+                "move_type": None,
+                "card_id": None,
+                "patron_id": None,
+                "effect_vec": None
+            }
+            move_metas_padded = move_metadata + [pad_meta] * (MAX_MOVES - len(move_metadata))
 
         with torch.no_grad():
-            logits, value, self.hidden = self.model(obs, padded_move_tensors, self.hidden)
+            logits, value, self.hidden = self.model(obs, move_metas_padded, self.hidden)
 
-        move_probs = torch.softmax(logits, dim=-1).flatten()[:len(possible_moves)]
+        probs = torch.softmax(logits, dim=-1).cpu().numpy().flatten()
+        probs = probs[:len(possible_moves)]
+        total = probs.sum()
 
-        probs = move_probs.detach().cpu().numpy()
-        probs /= probs.sum()
-
-        if self.evaluate:
-            idx = int(probs.argmax())
+        if total > 0:
+            probs /= total
+            if self.evaluate:
+                idx = int(probs.argmax())
+            else:
+                idx = int(np.random.choice(len(probs), p=probs))
         else:
-            idx = int(np.random.choice(len(probs), p=probs))
+            idx = 0
 
         selected_move = possible_moves[idx]
 
@@ -146,7 +154,7 @@ class TributeBotV1(BaseAI):
 
         self.trajectory.append({
             "game_state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
-            "move_tensor": padded_move_tensors.squeeze(0).cpu(),
+            "move_tensor": move_metadata,
             "action_idx": idx,
             "reward": None,
             "old_log_prob": float(np.log(probs[idx])),

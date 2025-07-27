@@ -6,8 +6,8 @@ import torch
 import torch.optim as optim
 import wandb
 
-from BetterNet.BetterNN.BetterNet_v13 import BetterNetV13
-from BetterNet.ReplayBuffer.ReplayBuffer_v13 import ReplayBuffer_v13
+from BetterNet.BetterNN.BetterNet_v15 import BetterNetV15
+from BetterNet.ReplayBuffer.ReplayBuffer_v15 import ReplayBuffer_v15
 from TributeNet.utils.file_locations import MODEL_PREFIX, EXTENSION
 
 # Device configuration
@@ -17,7 +17,7 @@ MODEL_PREFIX = MODEL_PREFIX
 EXTENSION = EXTENSION
 
 
-class Trainer_v13:
+class Trainer_v15:
     """
     Handles model loading, training over replay buffer, and saving.
     """
@@ -41,7 +41,7 @@ class Trainer_v13:
         self.epochs = epochs
 
         # Initialize model
-        self.model = BetterNetV13(hidden_dim=128, num_moves=10).to(device)
+        self.model = BetterNetV15(hidden_dim=128, num_moves=10).to(device)
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=device)
             self.model.load_state_dict(state)
@@ -53,12 +53,12 @@ class Trainer_v13:
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
         # Replay buffer
-        self.buffer = ReplayBuffer_v13(self.buffer_path)
+        self.buffer = ReplayBuffer_v15(self.buffer_path)
 
     def train(
             self,
             batch_size: int = 64,
-            clip_eps: float = 0.007,
+            clip_eps: float = 0.2,
             value_coeff: float = 0.5,
             entropy_coeff: float = 0.02,
     ):

@@ -7,7 +7,7 @@ from BetterNet.BetterNN.ResidualMLP import ResidualMLP
 from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
 from BetterNet.utils.move_to_tensor.move_to_tensor_v3 import MOVE_FEAT_DIM
 
-class BetterNetV13(nn.Module):
+class BetterNetV15(nn.Module):
     """
     BetterNetV3 includes an additional LSTM-Layer compared to BetterNetV2
     """

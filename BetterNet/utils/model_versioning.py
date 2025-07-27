@@ -1,7 +1,10 @@
 ﻿from pathlib import Path
 from typing import Optional
 
-def get_latest_model_path(base_dir: Path, model_prefix: str = "better_net_v", extension: str = ".pt") -> Path:
+from TributeNet.utils.file_locations import MODEL_PREFIX, EXTENSION
+
+
+def get_latest_model_path(base_dir: Path, model_prefix: str = MODEL_PREFIX, extension: str = EXTENSION) -> Path:
     """
     :return the latest model path in dir with specific prefix
     """
@@ -20,7 +23,7 @@ def get_latest_model_path(base_dir: Path, model_prefix: str = "better_net_v", ex
     latest_version = max(versions)
     return base_dir / f"{model_prefix}{latest_version}{extension}"
 
-def get_model_version_path(base_dir: Path, prefix: str = "better_net_v", extension: str = ".pt", offset: int = 0) -> Optional[Path]:
+def get_model_version_path(base_dir: Path, prefix: str = MODEL_PREFIX, extension: str = EXTENSION, offset: int = 0) -> Optional[Path]:
     """
     compared to get_latest_model_path can also handle offset to fest latest models instead of only current one
     Todo: unify with get_latest_model_path

@@ -3,11 +3,14 @@ import re
 from pathlib import Path
 from typing import Any, List
 
+from TributeNet.utils.file_locations import USED_SUMMARY_DIR, SUMMARY_FILE_NAME
+
+
 def merge_game_summaries(
     summary_dir: Path,
     merged_summary_dir: Path,
-    used_summary_dir: Path = Path("used_summaries"),
-    base_filename: str = "BetterNet_summary",
+    used_summary_dir: Path = USED_SUMMARY_DIR,
+    base_filename: str = SUMMARY_FILE_NAME,
 ) -> Path:
     """
     Merges individual per‐game summary pickle files into a single file for analysis.

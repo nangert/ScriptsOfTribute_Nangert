@@ -7,18 +7,21 @@ from BetterNet.BetterNet_Routine.RolloutWorker.RolloutWorkerv_v13 import Rollout
 from BetterNet.utils.merge_game_summaries import merge_game_summaries
 from BetterNet.utils.merge_replay_buffers import merge_replay_buffers
 from BetterNet.utils.model_versioning import get_latest_model_path, get_model_version_path
+from TributeNet.Training.Benchmark import Benchmark
+from TributeNet.utils.file_locations import BUFFER_DIR, SAVED_BUFFER_DIR, MODEL_DIR, MODEL_PREFIX, BUFFER_FILE_NAME, \
+    SUMMARY_DIR, MERGED_SUMMARY_DIR, USED_SUMMARY_DIR, SUMMARY_FILE_NAME
 
 # Directories for saving game trajectories
-GAME_BUFFERS_DIR = Path("game_buffers")
-MERGED_BUFFER_PATH = Path("saved_buffers")
+GAME_BUFFERS_DIR = BUFFER_DIR
+MERGED_BUFFER_PATH = SAVED_BUFFER_DIR
 
 # Directory for loading current model
-MODEL_DIR = Path("saved_models")
-MODEL_PREFIX = "better_net_v13_"
-BASE_FILENAME = 'BetterNet_v13_buffer'
+MODEL_DIR = MODEL_DIR
+MODEL_PREFIX = MODEL_PREFIX
+BASE_FILENAME = BUFFER_FILE_NAME
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 128
+GAMES_PER_CYCLE = 64
 THREADS = 8
 
 # Directories for logging
@@ -112,11 +115,17 @@ def main() -> None:
             merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename=BASE_FILENAME)
 
             merged_file = merge_game_summaries(
-                summary_dir=Path("game_summaries"),
-                merged_summary_dir=Path("merged_summaries"),
-                used_summary_dir=Path("used_summaries"),
-                base_filename="BetterNet_summary"
+                summary_dir=SUMMARY_DIR,
+                merged_summary_dir=MERGED_SUMMARY_DIR,
+                used_summary_dir=USED_SUMMARY_DIR,
+                base_filename=SUMMARY_FILE_NAME
             )
+
+            benchmark = Benchmark(
+                num_games=64,
+                num_threads=8
+            )
+            benchmark.run()
 
             # Write generation summary log
             with open(LOG_DIR / "generation_summary.log", "a") as f:

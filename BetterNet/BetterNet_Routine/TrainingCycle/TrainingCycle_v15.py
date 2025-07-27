@@ -8,7 +8,7 @@ import re
 import torch
 import wandb
 
-from BetterNet.BetterNet_Routine.Trainer.Trainer_v13 import Trainer_v13
+from BetterNet.BetterNet_Routine.Trainer.Trainer_v15 import Trainer_v15
 from BetterNet.utils.model_versioning import get_latest_model_path
 from TributeNet.utils.file_locations import MODEL_DIR, BUFFER_FILE_NAME, MODEL_PREFIX, BUFFER_DIR, SAVED_BUFFER_DIR
 
@@ -75,7 +75,7 @@ def main():
             model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
             logger.info("Starting training with model: %s", model_path)
 
-            trainer = Trainer_v13(
+            trainer = Trainer_v15(
                 model_path=model_path,
                 buffer_path=buffer_file,
                 save_path=SAVE_MODEL_PATH,

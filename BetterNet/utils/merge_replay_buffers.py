@@ -8,11 +8,14 @@ import uuid
 import os
 from pathlib import Path
 
+from TributeNet.utils.file_locations import USED_BUFFER_DIR, BUFFER_FILE_NAME
+
+
 def merge_replay_buffers(
     buffer_dir: Path,
     merged_buffer_dir: Path,
-    used_buffers_dir: Path = Path("used_buffers"),
-    base_filename: str = "BetterNet_buffer"
+    used_buffers_dir: Path = USED_BUFFER_DIR,
+    base_filename: str = BUFFER_FILE_NAME
 ):
     """
     Takes all per‐game .pkl episodes and merges them into one file.

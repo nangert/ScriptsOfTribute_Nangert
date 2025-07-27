@@ -7,9 +7,12 @@ EFFECT_TYPES = [
 ]
 EFFECT_TYPE_TO_IDX = {name: i for i, name in enumerate(EFFECT_TYPES)}
 NUM_EFFECT_TYPES = len(EFFECT_TYPES)
-EFFECT_VECTOR_DIM = NUM_EFFECT_TYPES + 1
+EFFECT_VECTOR_DIM = NUM_EFFECT_TYPES + 1  # one-hot + amount scalar
 
-def encode_effect_string_v1(effect_str: str) -> torch.Tensor:
+def encode_effect_string(effect_str: str) -> torch.Tensor:
+    """
+    Parses an effect string like 'GAIN_POWER 2' and returns one-hot + amount encoding.
+    """
     parts = effect_str.strip().split()
     if len(parts) != 2:
         return torch.zeros(EFFECT_VECTOR_DIM)  # fallback

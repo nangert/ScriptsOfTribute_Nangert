@@ -6,7 +6,7 @@ from scripts_of_tribute.move import BasicMove, SimplePatronMove, SimpleCardMove,
 import torch
 
 from TributeNet.Bot.ParseGameState.card_to_tensor_v1 import encode_card_tensor_v1
-from TributeNet.Bot.ParseGameState.encode_effects_string_v1 import encode_effect_string_v1, EFFECT_VECTOR_DIM
+from TributeNet.Bot.ParseGameState.encode_effects_string_v1 import EFFECT_VECTOR_DIM, encode_effect_string
 
 NUM_MOVE_TYPES = len(MoveEnum)
 NUM_PATRONS = len(PatronId)
@@ -55,7 +55,7 @@ def moves_to_tensor_v1(move: BasicMove, game_state: GameState) -> torch.Tensor:
     effect_vec = torch.zeros(EFFECT_VECTOR_DIM)
     if isinstance(move, MakeChoiceMoveUniqueEffect):
         if move.effects:
-            effect_vec = encode_effect_string_v1(move.effects[0])
+            effect_vec = encode_effect_string(move.effects[0])
 
     move_subclass = torch.tensor([
         float(isinstance(move, SimpleCardMove)),
