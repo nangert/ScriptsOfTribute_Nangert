@@ -2,9 +2,12 @@
 
 from scripts_of_tribute.game import Game
 
+from BetterNet.BetterNN_Bot.BetterNetBot_v13 import BetterNetBot_v13
 from BetterNet.BetterNN_Bot.BetterNetBot_v15 import BetterNetBot_v15
+from BetterNet.utils.model_versioning import get_latest_model_path
 from RandomBot.BaselineBot import BaselineBot
 from TributeNet.Bot.TributeBotV1 import TributeBotV1
+from TributeNet.utils.file_locations import MODEL_DIR, MODEL_PREFIX
 
 
 class Benchmark:
@@ -19,7 +22,8 @@ class Benchmark:
 
 
     def run(self) -> None:
-        bot1 = BetterNetBot_v15(bot_name='BetterNetBot_1', evaluate=True, use_latest_model=True, is_benchmark=True, save_trajectory=False)
+        model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+        bot1 = BetterNetBot_v15(bot_name='BetterNetBot_1', evaluate=True, model_path=model_path, is_benchmark=True)
         bot2 = BaselineBot(bot_name="Baseline")
 
         game = Game()

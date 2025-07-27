@@ -20,10 +20,6 @@ from TributeNet.utils.model_versioning import get_model_version_path, select_osf
 
 
 class BetterNetBot_v15(BaseAI):
-    """
-    Bot that uses a neural network policy to select moves.
-    Includes lstm-Layer.
-    """
 
     def __init__(
         self,
@@ -44,7 +40,7 @@ class BetterNetBot_v15(BaseAI):
 
         if model_path is not None and model_path.exists():
             self.model_path = model_path
-            self.save_trajectory_flag = False
+            self.save_trajectory_flag = True
         else:
             if use_latest_model:
                 path = get_model_version_path()
@@ -62,7 +58,6 @@ class BetterNetBot_v15(BaseAI):
 
         self.trajectory: List[dict] = []
         self.winner: Optional[str] = None
-        self.save_trajectory_flag = save_trajectory
         self.evaluate = evaluate
         self.hidden = None
 
@@ -88,7 +83,6 @@ class BetterNetBot_v15(BaseAI):
             )
 
     def pregame_prepare(self) -> None:
-        """Reset history, trajectory, winner and lstm-hidden-layer before each game."""
         self.trajectory.clear()
         self.winner = None
         self.hidden = None
@@ -126,11 +120,6 @@ class BetterNetBot_v15(BaseAI):
         possible_moves: List[BasicMove],
         remaining_time: int,
     ) -> BasicMove:
-        """
-        Gets game_state and possible_moves
-        If self.evaluate = True chooses move with the highest probability
-        If self.evaluate = False samples move from probability distribution
-        """
 
         if self.summary_stats["player"] is None:
             self.summary_stats["player"] = game_state.current_player.player_id.name
@@ -219,11 +208,6 @@ class BetterNetBot_v15(BaseAI):
         return chosen_move
 
     def game_end(self, end_game_state: EndGameState, final_state: GameState) -> None:
-        """
-        Determine game-winner and set reward for all steps
-        Reward gets discounted by γ for each step
-        """
-
         winner = end_game_state.winner
         if winner == self.summary_stats["player"]:
         #if winner == "PLAYER1":
@@ -254,10 +238,6 @@ class BetterNetBot_v15(BaseAI):
             self.save_summary_stats()
 
     def save_trajectory(self) -> None:
-        """
-        Save trajectory to game_buffer
-        Uses UUID to create file for each episode and avoid conflict when multiple episodes are saved simultaneously in subprocesses/threads
-        """
         buffer_dir = BUFFER_DIR
         buffer_dir.mkdir(parents=True, exist_ok=True)
         filename = buffer_dir / f"{self.bot_name}{MODEL_VERSION}{uuid.uuid4().hex}.pkl"

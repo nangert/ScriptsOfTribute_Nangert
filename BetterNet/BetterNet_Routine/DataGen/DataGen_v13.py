@@ -21,7 +21,7 @@ MODEL_PREFIX = MODEL_PREFIX
 BASE_FILENAME = BUFFER_FILE_NAME
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 128
 THREADS = 8
 
 # Directories for logging

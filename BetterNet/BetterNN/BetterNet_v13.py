@@ -3,6 +3,8 @@ import torch.nn as nn
 from typing import Dict, Tuple
 
 from BetterNet.BetterNN.CardEmbedding import CardEmbedding
+from BetterNet.BetterNN.EffectsEmbedding import EffectsEmbedding
+from BetterNet.BetterNN.PatronEmbedding import PatronEmbedding
 from BetterNet.BetterNN.ResidualMLP import ResidualMLP
 from BetterNet.BetterNN.TavernSelfAttention import TavernSelfAttention
 from BetterNet.utils.move_to_tensor.move_to_tensor_v3 import MOVE_FEAT_DIM
@@ -61,6 +63,18 @@ class BetterNetV13(nn.Module):
 
         # Shared card embedding
         self.card_embedding = CardEmbedding(num_cards=num_cards, embed_dim=hidden_dim, scalar_feat_dim=3)
+
+        # Shared patron embedding
+        self.patron_embedding = PatronEmbedding(num_patrons=10, embed_dim=hidden_dim)
+
+        # Shared Effects embedding
+        self.effects_embedding = EffectsEmbedding(embed_dim=hidden_dim)
+
+        # Tavern Encoder, Input head for current state of tavern, Encodes all cards currently in the tavern
+        self.tavern_encoder = nn.Sequential(
+            nn.Linear(self.card_dim, hidden_dim),
+            nn.ReLU(),
+        )
 
         self.tavern_available_attention = TavernSelfAttention(hidden_dim, hidden_dim)
         # TavernSelfAttention: if input is [B, N, D], returns [B, H].
