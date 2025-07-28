@@ -15,7 +15,7 @@ from scripts_of_tribute.board import EndGameState
 from BetterNet.BetterNN.BetterNet_v13 import BetterNetV13
 from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v5 import game_state_to_tensor_dict_v5
 from BetterNet.utils.move_to_tensor.move_to_tensor_v3 import move_to_tensor_v3, MOVE_FEAT_DIM
-from TributeNet.utils.file_locations import WHITELISTED_PATRONS, SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR
+from TributeNet.utils.file_locations import WHITELISTED_PATRONS, SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR, BENCHMARK_DIR
 
 
 class BetterNetBot_v13(BaseAI):
@@ -30,10 +30,12 @@ class BetterNetBot_v13(BaseAI):
         bot_name: str = "BetterNet",
         save_trajectory: bool = True,
         evaluate: bool = False,
+        is_benchmark: bool = False,
     ):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model_path = model_path
+        self.is_benchmark = is_benchmark
 
         model = BetterNetV13(hidden_dim=128, num_moves=10)
         if self.model_path.exists():
@@ -226,7 +228,7 @@ class BetterNetBot_v13(BaseAI):
         for turn_idx, cnt in enumerate(self.moves_per_turn):
             turn_indices += [turn_idx] * cnt
 
-        γ = 0.99
+        γ = 1.0
         for move_idx, step in enumerate(self.trajectory):
             turn_idx = turn_indices[move_idx]
             discount_multiplier = γ ** (total_turns - 1 - turn_idx)
@@ -256,8 +258,15 @@ class BetterNetBot_v13(BaseAI):
             f.flush()
 
     def save_summary_stats(self) -> None:
-        SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
-        filename = SUMMARY_DIR / f"{self.bot_name}{MODEL_VERSION}{uuid.uuid4().hex}_summary.pkl"
-        with open(filename, "wb") as f:
-            pickle.dump(self.summary_stats, f)
-            f.flush()
+        if self.is_benchmark:
+            BENCHMARK_DIR.mkdir(parents=True, exist_ok=True)
+            filename = BENCHMARK_DIR / f"{self.bot_name}{uuid.uuid4().hex}_summary.pkl"
+            with open(filename, "wb") as f:
+                pickle.dump(self.summary_stats, f)
+                f.flush()
+        else:
+            SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
+            filename = SUMMARY_DIR / f"{self.bot_name}{uuid.uuid4().hex}_summary.pkl"
+            with open(filename, "wb") as f:
+                pickle.dump(self.summary_stats, f)
+                f.flush()

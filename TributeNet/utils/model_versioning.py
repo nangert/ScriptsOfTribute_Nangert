@@ -2,9 +2,6 @@
 from typing import Optional
 import random
 
-from click import Tuple
-from sympy.logic.boolalg import Boolean
-
 from TributeNet.utils.file_locations import MODEL_DIR, MODEL_PREFIX
 
 OSFP_LATEST_PROB = 0.6

@@ -4,7 +4,6 @@ from typing import Optional
 
 import torch
 import torch.optim as optim
-import wandb
 
 from BetterNet.BetterNN.BetterNet_v13 import BetterNetV13
 from BetterNet.ReplayBuffer.ReplayBuffer_v13 import ReplayBuffer_v13
@@ -27,7 +26,6 @@ class Trainer_v13:
         model_path: Path,
         buffer_path: Path,
         save_path: Path,
-        wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
         lr: float = 1e-4,
         epochs = 5
     ) -> None:
@@ -37,7 +35,6 @@ class Trainer_v13:
         self.model_path = model_path
         self.buffer_path = buffer_path
         self.save_path = save_path
-        self.wandb_run = wandb_run
         self.epochs = epochs
 
         # Initialize model
@@ -59,7 +56,7 @@ class Trainer_v13:
             self,
             batch_size: int = 64,
             clip_eps: float = 0.2,
-            value_coeff: float = 0.5,
+            value_coeff: float = 0.7,
             entropy_coeff: float = 0.01,
     ):
         # 1) Load one batch of B episodes (e.g. B=128) from the buffer
@@ -157,15 +154,6 @@ class Trainer_v13:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
                 self.optimizer.zero_grad()
-
-                if self.wandb_run:
-                    self.wandb_run.log({
-                        "policy_loss": pol_loss.item(),
-                        "value_loss": value_loss.item(),
-                        "entropy": ent.item(),
-                        "epoch": epoch,
-                        "step": step,
-                    })
 
                 step += 1
 

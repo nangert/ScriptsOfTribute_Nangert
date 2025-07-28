@@ -23,7 +23,7 @@ class Benchmark:
 
     def run(self) -> None:
         model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-        bot1 = BetterNetBot_v15(bot_name='BetterNetBot_1', evaluate=True, model_path=model_path, is_benchmark=True)
+        bot1 = BetterNetBot_v13(bot_name='BetterNetBot_1', evaluate=True, model_path=model_path, is_benchmark=True)
         bot2 = BaselineBot(bot_name="Baseline")
 
         game = Game()

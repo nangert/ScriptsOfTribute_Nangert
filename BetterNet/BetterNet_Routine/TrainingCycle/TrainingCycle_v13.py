@@ -6,7 +6,6 @@ from pathlib import Path
 import re
 
 import torch
-import wandb
 
 from BetterNet.BetterNet_Routine.Trainer.Trainer_v13 import Trainer_v13
 from BetterNet.utils.model_versioning import get_latest_model_path
@@ -24,7 +23,7 @@ MERGED_BUFFER_DIR = SAVED_BUFFER_DIR
 
 GAMES_PER_CYCLE = 64
 EPOCHS_PER_CYCLE = 2
-BATCH_SIZE = 32
+BATCH_SIZE = 323
 LEARNING_RATE = 3e-5
 SLEEP_IF_NO_DATA = 60
 
@@ -48,50 +47,32 @@ def main():
     )
     logger = logging.getLogger("TrainerLoop")
 
-    wandb_run = wandb.init(
-        project="ScriptsOfTribute",
-        entity="angert-niklas",
-        config={
-            "games_per_cycle": GAMES_PER_CYCLE,
-            "epochs_per_cycle": EPOCHS_PER_CYCLE,
-            "batch_size": BATCH_SIZE,
-            "learning_rate": LEARNING_RATE,
-            "model": "BetterNetV3",
-        },
-        name="continuous_training_run"
-    )
+    while True:
+        # Check if there are at least GAMES_PER_CYCLE new game buffers
+        buffer_file = get_lowest_buffer_file(MERGED_BUFFER_DIR)
 
-    try:
-        while True:
-            # Check if there are at least GAMES_PER_CYCLE new game buffers
-            buffer_file = get_lowest_buffer_file(MERGED_BUFFER_DIR)
+        if buffer_file is None:
+            logger.warning("No buffer file found. Sleeping...")
+            time.sleep(SLEEP_IF_NO_DATA)
+            continue
 
-            if buffer_file is None:
-                logger.warning("No buffer file found. Sleeping...")
-                time.sleep(SLEEP_IF_NO_DATA)
-                continue
+        # Load latest or create new model
+        model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+        logger.info("Starting training with model: %s", model_path)
 
-            # Load latest or create new model
-            model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            logger.info("Starting training with model: %s", model_path)
+        trainer = Trainer_v13(
+            model_path=model_path,
+            buffer_path=buffer_file,
+            save_path=SAVE_MODEL_PATH,
+            lr=LEARNING_RATE,
+            epochs=EPOCHS_PER_CYCLE
+        )
+        trainer.train(
+            batch_size=BATCH_SIZE
+        )
 
-            trainer = Trainer_v13(
-                model_path=model_path,
-                buffer_path=buffer_file,
-                save_path=SAVE_MODEL_PATH,
-                wandb_run=wandb_run,
-                lr=LEARNING_RATE,
-                epochs=EPOCHS_PER_CYCLE
-            )
-            trainer.train(
-                batch_size=BATCH_SIZE
-            )
+        logger.info("Training complete. Waiting for more data...")
 
-            logger.info("Training complete. Waiting for more data...")
-
-    finally:
-        wandb_run.finish()
-        logger.info("W&B run finished.")
 
 if __name__ == "__main__":
     freeze_support()
