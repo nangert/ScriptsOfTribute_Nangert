@@ -29,7 +29,7 @@ def main():
     parser.add_argument(
         "--lr",
         type=float,
-        default=3e-5,
+        default=1e-5,
         help="Learning rate."
     )
 

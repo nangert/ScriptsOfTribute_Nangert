@@ -60,56 +60,70 @@ class Trainer_V1:
                 obs_batch = {k: v.to(self.device)[batch_idx] for k, v in obs_all.items()}
                 actions_batch = actions_all.to(self.device)[batch_idx]
                 returns_batch = returns_all.to(self.device)[batch_idx]
-                moves_batch = moves_all.to(self.device)[batch_idx]
                 oldlp_batch = old_lp_all.to(self.device)[batch_idx]
                 mask_batch = mask_all[batch_idx]
 
                 Bp = actions_batch.size(0)
 
-                final_hidden_all, values = self.model(obs_batch, moves_batch)
+                move_meta_batch = [moves_all[i] for i in batch_idx.tolist()]
+                move_emb_nested = []
+                for episode in move_meta_batch:
+                    step_embs_list = []
+                    for step_meta in episode:
+                        step_embs = [self.model._embed_move_meta(m, self.device).squeeze(0) for m in step_meta]
+                        step_tensor = torch.stack(step_embs)
+                        step_tensor = torch.nn.functional.pad(step_tensor, (0, 0, 0, 10 - step_tensor.size(0)))
+                        step_embs_list.append(step_tensor)
+                    move_emb_nested.append(torch.stack(step_embs_list))
+
+                max_T = T
+                move_emb_padded = torch.stack([
+                    torch.nn.functional.pad(m, (0, 0, 0, 0, 0, max_T - m.size(0))) for m in move_emb_nested
+                ]).to(self.device)  # [B, T, 10, D]
+
+                lstm_out, values = self.model(obs_batch, None)
+                final_hidden_all = self.model.policy_proj(lstm_out)
 
                 Bt = Bp * T
-                N = moves_batch.size(2)
-                Dm = moves_batch.size(3)
-                move_flat = moves_batch.view(Bt, N, Dm)
-                move_emb_flat = self.model.move_encoder(move_flat)
-                move_emb_all = move_emb_flat.view(Bp, T, N, -1)
-
-                H_flat = final_hidden_all.view(Bt, 128).unsqueeze(2)
-                M_flat = move_emb_all.view(Bt, N, 128)
+                H_flat = final_hidden_all.view(Bt, -1).unsqueeze(2)  # [B*T, 128, 1]
+                M_flat = move_emb_padded.view(Bt, 10, -1)
                 logits_flat = torch.bmm(M_flat, H_flat).squeeze(2)
-                logits_all = logits_flat.view(Bp, T, N)
+                logits_all = logits_flat.view(Bp, T, 10)
 
-                dist_all = torch.distributions.Categorical(logits=logits_all.view(-1, N))
+                mask_flat = mask_batch.view(-1)  # [B*T]
                 acts_flat = actions_batch.view(-1)
-                logp_flat = dist_all.log_prob(acts_flat)
+                valid_mask = mask_flat == 1
+                logits_valid = logits_all.view(-1, 10)[valid_mask]
+                acts_valid = acts_flat[valid_mask]
+
+                dist_valid = torch.distributions.Categorical(logits=logits_valid)
+                logp_valid = dist_valid.log_prob(acts_valid)
+
+                logp_flat = torch.zeros_like(acts_flat, dtype=torch.float)
+                logp_flat[valid_mask] = logp_valid
 
                 oldlp_flat = oldlp_batch.view(-1)
                 ret_flat = returns_batch.view(-1)
                 val_flat = values.view(-1)
                 adv_flat = ret_flat - val_flat
 
-                mask_flat = mask_batch.view(-1)
-                logp_flat = logp_flat * mask_flat
-                oldlp_flat = oldlp_flat * mask_flat
-                adv_flat = adv_flat * mask_flat
+                logp_flat *= mask_flat
+                oldlp_flat *= mask_flat
+                adv_flat *= mask_flat
 
                 adv_mean = adv_flat.sum() / mask_flat.sum()
-                adv_var = ((adv_flat - adv_mean).pow(2) * mask_flat).sum() / mask_flat.sum()
-                adv_std = torch.sqrt(adv_var + 1e-8)
-                adv_norm = (adv_flat - adv_mean) / adv_std
+                adv_std = ((adv_flat - adv_mean).pow(2) * mask_flat).sum() / mask_flat.sum()
+                adv_norm = (adv_flat - adv_mean) / (adv_std + 1e-8)
 
                 ratio_flat = torch.exp(logp_flat - oldlp_flat)
                 clipped_flat = torch.clamp(ratio_flat, 1 - clip_eps, 1 + clip_eps)
                 pol_loss_flat = -torch.min(ratio_flat * adv_norm, clipped_flat * adv_norm)
-
                 pol_loss = (pol_loss_flat * mask_flat).sum() / mask_flat.sum()
 
-                mse_all = (val_flat - ret_flat).pow(2)
-                value_loss = (mse_all * mask_flat).sum() / mask_flat.sum()
+                value_loss = ((val_flat - ret_flat).pow(2) * mask_flat).sum() / mask_flat.sum()
 
-                entropy_flat = dist_all.entropy()
-                ent = (entropy_flat * mask_flat).sum() / mask_flat.sum()
+                entropy_flat = dist_valid.entropy()
+                ent = entropy_flat.sum() / mask_flat.sum()
 
                 total_loss = pol_loss + value_coeff * value_loss - entropy_coeff * ent
                 total_loss.backward()

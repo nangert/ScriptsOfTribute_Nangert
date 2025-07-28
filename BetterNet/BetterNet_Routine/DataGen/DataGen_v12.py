@@ -3,10 +3,11 @@ import random
 from datetime import datetime
 from pathlib import Path
 
-from RolloutWorker_v2.RolloutWorker.RolloutWorkerv_v12 import RolloutWorker_v12
+from BetterNet.BetterNet_Routine.RolloutWorker.RolloutWorkerv_v12 import RolloutWorker_v12
 from BetterNet.utils.merge_game_summaries import merge_game_summaries
 from BetterNet.utils.merge_replay_buffers import merge_replay_buffers
 from BetterNet.utils.model_versioning import get_latest_model_path, get_model_version_path
+from TributeNet.Training.Benchmark import Benchmark
 
 # Directories for saving game trajectories
 GAME_BUFFERS_DIR = Path("game_buffers")
@@ -115,6 +116,12 @@ def main() -> None:
                 used_summary_dir=Path("used_summaries"),
                 base_filename="BetterNet_summary"
             )
+
+            benchmark = Benchmark(
+                num_games=64,
+                num_threads=8
+            )
+            benchmark.run()
 
             # Write generation summary log
             with open(LOG_DIR / "generation_summary.log", "a") as f:

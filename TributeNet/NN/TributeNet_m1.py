@@ -86,7 +86,7 @@ class TributeNetV1(nn.Module):
             return embedded.view(B, T, -1)
 
         current_shape = obs["player_tensor"].shape
-        if len(current_shape) == 4:
+        if len(current_shape) == 3:
             player_encoded = self.player_encoder(obs['player_tensor'])
             opponent_encoded = self.opponent_encoder(obs['opponent_tensor'])
             patron_encoded = self.patron_encoder(obs['patron_tensor'].flatten(start_dim=-2))
@@ -125,11 +125,11 @@ class TributeNetV1(nn.Module):
             ], dim=-1))
 
             lstm_out, _ = self.lstm(context)
-            final_hidden_proj = self.policy_proj(lstm_out)
 
             value = self.value_head(lstm_out)
 
-            return final_hidden_proj, value
+            return lstm_out, value
+
 
 
         elif len(current_shape) == 2:

@@ -2,7 +2,9 @@
 
 from scripts_of_tribute.game import Game
 
+from BetterNet.BetterNN_Bot.BetterNetBot_v12 import BetterNetBot_v12
 from BetterNet.BetterNN_Bot.BetterNetBot_v13 import BetterNetBot_v13
+from BetterNet.BetterNN_Bot.BetterNetBot_v14 import BetterNetBot_v14
 from BetterNet.BetterNN_Bot.BetterNetBot_v15 import BetterNetBot_v15
 from BetterNet.utils.model_versioning import get_latest_model_path
 from RandomBot.BaselineBot import BaselineBot
