@@ -41,13 +41,14 @@ def main() -> None:
         )
         worker.run()
 
-        i += 1
-        if i % 4 == 0:
+        if i % 3 == 0:
             benchmark = Benchmark(
                 num_games=args.num_games,
                 num_threads=args.num_threads
             )
             benchmark.run()
+
+        i += 1
 
 if __name__ == '__main__':
     main()

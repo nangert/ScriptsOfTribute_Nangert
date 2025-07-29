@@ -14,7 +14,6 @@ from scripts_of_tribute.enums import PatronId
 from scripts_of_tribute.move import BasicMove
 
 from TributeNet.Bot.ParseGameState.game_state_to_tensor_v1 import game_state_to_tensor_v1
-from TributeNet.Bot.ParseGameState.move_to_metadata_v1 import move_to_metadata
 from TributeNet.Bot.ParseGameState.move_to_tensor_v1 import moves_to_tensor_v1, MOVE_FEAT_DIM
 from TributeNet.NN.TributeNet_v1 import TributeNetV1
 from TributeNet.utils.file_locations import BUFFER_DIR, SUMMARY_DIR, BENCHMARK_DIR
@@ -105,21 +104,18 @@ class TributeBotV1(BaseAI):
         obs = game_state_to_tensor_v1(game_state)
         obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}
 
-        move_metadata = [move_to_metadata(m, game_state) for m in possible_moves]
+        move_tensors = [moves_to_tensor_v1(m, game_state) for m in possible_moves]
 
-        if len(move_metadata) >= MAX_MOVES:
-            move_metas_padded = move_metadata[:MAX_MOVES]
+        if len(move_tensors) >= MAX_MOVES:
+            batch = move_tensors[:MAX_MOVES]
         else:
-            pad_meta = {
-                "move_type": None,
-                "card_id": None,
-                "patron_id": None,
-                "effect_vec": None
-            }
-            move_metas_padded = move_metadata + [pad_meta] * (MAX_MOVES - len(move_metadata))
+            # otherwise add padding moves
+            padding = [torch.zeros(MOVE_FEAT_DIM) for _ in range(MAX_MOVES - len(move_tensors))]
+            batch = move_tensors + padding
+        move_batch = torch.stack(batch, dim=0).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
-            logits, value, self.hidden = self.model(obs, move_metas_padded, self.hidden)
+            logits, value, self.hidden = self.model(obs, move_batch, self.hidden)
 
         probs = torch.softmax(logits, dim=-1).cpu().numpy().flatten()
         probs = probs[:len(possible_moves)]
@@ -154,7 +150,7 @@ class TributeBotV1(BaseAI):
 
         self.trajectory.append({
             "game_state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
-            "move_tensor": move_metadata,
+            "move_tensor": move_batch.squeeze(0).cpu(),
             "action_idx": idx,
             "reward": None,
             "old_log_prob": float(np.log(probs[idx])),

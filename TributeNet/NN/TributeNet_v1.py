@@ -10,8 +10,8 @@ from TributeNet.NN.CardEmbedding import CardEmbedding
 from TributeNet.NN.EffectsEmbedding import EffectsEmbedding
 from TributeNet.NN.PatronEmbedding import PatronEmbedding
 from TributeNet.NN.ResidualMLP import ResidualMLP
-from TributeNet.NN.TavernCrossAttention import TavernCrossAttention
 from TributeNet.NN.TavernSelfAttention import TavernSelfAttention
+
 
 class TributeNetV1(nn.Module):
 
@@ -52,13 +52,13 @@ class TributeNetV1(nn.Module):
 
         self.effects_embedding = EffectsEmbedding(embed_dim=hidden_dim)
 
-        self.tavern_cross_attn = TavernCrossAttention(dim_in=128, dim_qk=128)
-
         self.fusion = nn.Sequential(
             nn.Linear(hidden_dim * 9, hidden_dim * 4),
             nn.ReLU(),
             ResidualMLP(hidden_dim * 4, hidden_dim * 4),
         )
+
+        self.tavern_available_attention = TavernSelfAttention(hidden_dim, hidden_dim)
 
         self.lstm = nn.LSTM(
             input_size=hidden_dim * 4,
@@ -86,7 +86,7 @@ class TributeNetV1(nn.Module):
             return embedded.view(B, T, -1)
 
         current_shape = obs["player_tensor"].shape
-        if len(current_shape) == 4:
+        if len(current_shape) == 3:
             player_encoded = self.player_encoder(obs['player_tensor'])
             opponent_encoded = self.opponent_encoder(obs['opponent_tensor'])
             patron_encoded = self.patron_encoder(obs['patron_tensor'].flatten(start_dim=-2))
@@ -97,13 +97,9 @@ class TributeNetV1(nn.Module):
                 obs["tavern_available_ids"].view(B * T, N),
                 obs["tavern_available_feats"].view(B * T, N, -1)
             )
-            B, T, N = obs["deck_ids"].shape
-            deck_enc = self.card_embedding(
-                obs["deck_ids"].view(B * T, N),
-                obs["deck_feats"].view(B * T, N, -1)
-            )
 
-            tavern_attention = self.tavern_cross_attn(tavern_available_embed, deck_enc).view(B, T, -1)
+            tav_avail_attn = self.tavern_available_attention(tavern_available_embed)  # [B*T, D]
+            tav_avail_attn = tav_avail_attn.view(B, T, -1)
 
             hand_enc = embed_mean('hand', B, T)
             player_agents_enc = embed_mean('player_agents', B, T)
@@ -115,7 +111,7 @@ class TributeNetV1(nn.Module):
                 player_encoded,
                 opponent_encoded,
                 patron_encoded,
-                tavern_attention,
+                tav_avail_attn,
                 #deck_enc,
                 hand_enc,
                 played_enc,
@@ -131,21 +127,16 @@ class TributeNetV1(nn.Module):
 
             return final_hidden_proj, value
 
-
         elif len(current_shape) == 2:
+            B, N, D_move = move_tensor.shape
 
             player_encoded = self.player_encoder(obs['player_tensor'])
             opponent_encoded = self.opponent_encoder(obs['opponent_tensor'])
             patron_encoded = self.patron_encoder(obs['patron_tensor'].flatten(start_dim=-2))
 
-            B, _ = obs['hand_ids'].shape
-            tavern_available_embed = self.card_embedding(obs["tavern_available_ids"], obs["tavern_available_feats"]).mean(dim=1)
-            deck_emb = self.card_embedding(
-                obs["deck_ids"],
-                obs["deck_feats"],
+            tav_avail_attn = self.tavern_available_attention(
+                self.card_embedding(obs["tavern_available_ids"], obs["tavern_available_feats"])
             )
-
-            tavern_attention = self.tavern_cross_attn(tavern_available_embed, deck_emb)
 
             hand_enc = embed_mean('hand', B, 1).squeeze(1)
             player_agents_enc = embed_mean('player_agents', B, 1).squeeze(1)
@@ -157,7 +148,7 @@ class TributeNetV1(nn.Module):
                 player_encoded,
                 opponent_encoded,
                 patron_encoded,
-                tavern_attention,
+                tav_avail_attn,
                 #deck_enc,
                 hand_enc,
                 played_enc,
@@ -171,7 +162,7 @@ class TributeNetV1(nn.Module):
 
             value = self.value_head(lstm_out).squeeze(-1).squeeze(-1)
 
-            move_emb = torch.stack([self._embed_move_meta(m, obs["player_tensor"].device).squeeze(0) for m in move_tensor], dim=0).unsqueeze(0)
+            move_emb = self.move_encoder(move_tensor)
             logits = torch.bmm(move_emb, final_hidden_proj.unsqueeze(2)).squeeze(2)
 
             return logits, value, new_hidden
@@ -180,18 +171,3 @@ class TributeNetV1(nn.Module):
             raise ValueError(
                 f"Unexpected move_tensor.dim()={current_shape}; expected 3 or 4."
             )
-
-    def _embed_move_meta(self, meta: dict, device: torch.device) -> torch.Tensor:
-        if meta["card_id"] is not None and meta["card_id"] >= 0:
-            card_id = torch.tensor([meta["card_id"]], dtype=torch.long, device=device)
-            feats = torch.zeros((1, 3), device=device)
-            return self.card_embedding(card_id, feats)
-
-        elif meta["patron_id"] is not None and meta["patron_id"] >= 0:
-            patron_id = torch.tensor([meta["patron_id"]], dtype=torch.long, device=device)
-            return self.patron_embedding(patron_id)
-
-        elif meta["effect_vec"] is not None and isinstance(meta["effect_vec"], torch.Tensor):
-            return self.effects_embedding(meta["effect_vec"].to(device).unsqueeze(0))
-
-        return torch.zeros((1, self.policy_proj.out_features), device=device)
