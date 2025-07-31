@@ -250,6 +250,10 @@ class BetterNetBot_v13(BaseAI):
         Save trajectory to game_buffer
         Uses UUID to create file for each episode and avoid conflict when multiple episodes are saved simultaneously in subprocesses/threads
         """
+
+        if self.is_benchmark:
+            return
+
         buffer_dir = BUFFER_DIR
         buffer_dir.mkdir(parents=True, exist_ok=True)
         filename = buffer_dir / f"{self.bot_name}{MODEL_VERSION}{uuid.uuid4().hex}.pkl"

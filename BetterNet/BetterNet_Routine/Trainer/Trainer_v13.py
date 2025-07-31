@@ -54,10 +54,10 @@ class Trainer_v13:
 
     def train(
             self,
-            batch_size: int = 64,
+            batch_size: int = 32,
             clip_eps: float = 0.2,
-            value_coeff: float = 0.7,
-            entropy_coeff: float = 0.01,
+            value_coeff: float = 0.5,
+            entropy_coeff: float = 0.02,
     ):
         # 1) Load one batch of B episodes (e.g. B=128) from the buffer
         obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
