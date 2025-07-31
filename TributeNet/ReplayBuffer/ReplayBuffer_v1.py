@@ -15,7 +15,7 @@ class ReplayBuffer_V1:
             "patron_tensor",
             "tavern_available_ids", "tavern_available_feats",
             "hand_ids", "hand_feats",
-            "deck_ids", "deck_feats",
+            #"deck_ids", "deck_feats",
             "known_ids", "known_feats",
             "played_ids", "played_feats",
             "player_agents_ids", "player_agents_feats",

@@ -38,8 +38,8 @@ def game_state_to_tensor_v1(game_state: GameState) -> dict[str, torch.Tensor]:
         "played_ids": played_ids,
         "played_feats": played_feats,
 
-        "deck_ids": deck_ids,
-        "deck_feats": deck_feats,
+        #"deck_ids": deck_ids,
+        #"deck_feats": deck_feats,
 
         "player_agents_ids": player_agents_ids,
         "player_agents_feats": player_agents_feats,

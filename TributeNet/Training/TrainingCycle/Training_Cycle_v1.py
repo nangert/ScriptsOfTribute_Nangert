@@ -47,7 +47,6 @@ def main():
         data = merge_replay_buffers_v1(num_files=args.num_files)
 
         if data is None:
-            print("No buffer file found. Sleeping...")
             time.sleep(args.sleep)
             continue
 

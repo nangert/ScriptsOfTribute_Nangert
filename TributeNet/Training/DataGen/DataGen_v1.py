@@ -13,25 +13,23 @@ def main() -> None:
     parser.add_argument(
         "--num-games",
         type=int,
-        default=10,
+        default=64,
         help="Number of games each worker should simulate per batch."
     )
     parser.add_argument(
         "--num-threads",
         type=int,
-        default=4,
+        default=8,
         help="Number of parallel threads to run per worker."
     )
     args = parser.parse_args()
 
     print(f"Starting datagen: {args.num_games=}  {args.num_threads=}")
 
-    i = 0
     while True:
         n_pending = len(list(BUFFER_DIR.glob("*.pkl")))
-        max_pending = 10 * args.num_games
+        max_pending = 3 * args.num_games
         if n_pending > max_pending:
-            print("Buffer full, Sleeping...")
             time.sleep(5)
             continue
 
@@ -41,14 +39,8 @@ def main() -> None:
         )
         worker.run()
 
-        if i % 3 == 0:
-            benchmark = Benchmark(
-                num_games=args.num_games,
-                num_threads=args.num_threads
-            )
-            benchmark.run()
-
-        i += 1
+        benchmark = Benchmark()
+        benchmark.run()
 
 if __name__ == '__main__':
     main()

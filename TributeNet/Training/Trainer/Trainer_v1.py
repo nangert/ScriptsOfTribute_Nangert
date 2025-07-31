@@ -13,7 +13,7 @@ class Trainer_V1:
     def __init__(
             self,
             raw_data,
-            lr: float = 3e-5,
+            lr: float = 1e-5,
             epochs: int = 2,
     ) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

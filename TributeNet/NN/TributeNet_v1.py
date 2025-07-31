@@ -7,8 +7,6 @@ from TributeNet.Bot.ParseGameState.move_to_tensor_v1 import MOVE_FEAT_DIM
 from TributeNet.Bot.ParseGameState.patrons_to_tensor_v1 import NUM_PATRON_STATES, NUM_PATRONS
 from TributeNet.Bot.ParseGameState.player_to_tensor_v1 import PLAYER_DIM, OPPONENT_DIM
 from TributeNet.NN.CardEmbedding import CardEmbedding
-from TributeNet.NN.EffectsEmbedding import EffectsEmbedding
-from TributeNet.NN.PatronEmbedding import PatronEmbedding
 from TributeNet.NN.ResidualMLP import ResidualMLP
 from TributeNet.NN.TavernSelfAttention import TavernSelfAttention
 
@@ -47,10 +45,6 @@ class TributeNetV1(nn.Module):
         )
 
         self.card_embedding = CardEmbedding(num_cards=num_cards, embed_dim=hidden_dim, scalar_feat_dim=3)
-
-        self.patron_embedding = PatronEmbedding(num_patrons=10, embed_dim=hidden_dim)
-
-        self.effects_embedding = EffectsEmbedding(embed_dim=hidden_dim)
 
         self.fusion = nn.Sequential(
             nn.Linear(hidden_dim * 9, hidden_dim * 4),

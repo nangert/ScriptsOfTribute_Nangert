@@ -37,26 +37,10 @@ class TributeBotV1(BaseAI):
         self.evaluate = evaluate
         self.save_trajectory_flag = False
         self.is_benchmark = is_benchmark
+        self.model_path = model_path
+        self.use_latest_model = use_latest_model
 
         self.model = TributeNetV1(hidden_dim=128).to(self.device)
-
-        if model_path is not None and model_path.exists():
-            self.model_path = model_path
-            self.save_trajectory_flag = True
-        else:
-            if use_latest_model:
-                path = get_model_version_path()
-                self.model_path = path
-                self.save_trajectory_flag = True
-            else:
-                path, is_latest = select_osfp_opponent()
-                self.model_path = path
-                self.save_trajectory_flag = bool(is_latest)
-
-        if self.model_path and self.model_path.exists():
-            self._load_state()
-
-        self.model.eval()
 
         self.trajectory: List[dict] = []
         self.hidden = None
@@ -73,11 +57,28 @@ class TributeBotV1(BaseAI):
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=self.device)
             self.model.load_state_dict(state)
-            print(f"Loaded {self.model_path.name} model from { self.model_path}")
         else:
             print(f"No {self.model_path.name} model found at {self.model_path}; using random initialization.")
 
     def pregame_prepare(self):
+        if self.model_path is not None and self.model_path.exists():
+            self.model_path = self.model_path
+            self.save_trajectory_flag = True
+        else:
+            if self.use_latest_model:
+                path = get_model_version_path()
+                self.model_path = path
+                self.save_trajectory_flag = True
+            else:
+                path, is_latest = select_osfp_opponent()
+                self.model_path = path
+                self.save_trajectory_flag = bool(is_latest)
+
+        if self.model_path and self.model_path.exists():
+            self._load_state()
+
+        self.model.eval()
+
         self.trajectory = []
         self.hidden = None
 
@@ -161,17 +162,13 @@ class TributeBotV1(BaseAI):
 
     def game_end(self, end_game_state: EndGameState, final_state: GameState):
         winner = end_game_state.winner
-        reward = 1.0 if winner == self.summary_stats["player"] else 0.0
+        reward = 1.0 if winner == self.summary_stats["player"] else -1.0
 
-        total_turns = len(self.moves_per_turn)
-        turn_indices = []
-        for turn_idx, cnt in enumerate(self.moves_per_turn):
-            turn_indices += [turn_idx] * cnt
+        γ = 1.0
+        N = len(self.trajectory)
 
-        y = 1.0
-        for move_idx, step in enumerate(self.trajectory):
-            turn_idx = turn_indices[move_idx]
-            discount_multiplier = y ** (total_turns - 1 - turn_idx)
+        for t, step in enumerate(self.trajectory):
+            discount_multiplier = γ ** (N - 1 - t)
             step["reward"] = reward * discount_multiplier
 
         self.summary_stats["finished_at"] = datetime.now(timezone.utc).isoformat()
