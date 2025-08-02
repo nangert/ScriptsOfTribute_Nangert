@@ -1,6 +1,5 @@
 ﻿import argparse
 import time
-from pathlib import Path
 
 from TributeNet.Training.Trainer.Trainer_v1 import Trainer_V1
 from TributeNet.utils.file_locations import SUMMARY_DIR, MERGED_SUMMARY_DIR, USED_SUMMARY_DIR

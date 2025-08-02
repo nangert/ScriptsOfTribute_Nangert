@@ -37,7 +37,7 @@ class Trainer_V1:
 
     def train(
             self,
-            batch_size: int = 32,
+            batch_size: int = 64,
             clip_eps: float = 0.2,
             value_coeff: float = 0.5,
             entropy_coeff: float = 0.02,

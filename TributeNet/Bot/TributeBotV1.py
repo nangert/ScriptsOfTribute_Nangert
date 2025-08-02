@@ -183,6 +183,9 @@ class TributeBotV1(BaseAI):
             self.save_summary_stats()
 
     def save_trajectory(self) -> None:
+        if self.is_benchmark:
+            return
+
         BUFFER_DIR.mkdir(parents=True, exist_ok=True)
 
         tmp_name = f"{uuid.uuid4().hex}.pkl.tmp"
