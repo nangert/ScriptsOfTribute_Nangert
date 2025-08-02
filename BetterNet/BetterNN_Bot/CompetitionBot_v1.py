@@ -74,9 +74,6 @@ class CompetitionBot_v1(BaseAI):
         possible_moves: List[BasicMove],
         remaining_time: int,
     ) -> BasicMove:
-        if self.summary_stats["player"] is None:
-            self.summary_stats["player"] = game_state.current_player.player_id.name
-
         obs = game_state_to_tensor_dict_v5(game_state)
 
         obs = {k: v.unsqueeze(0) for k, v in obs.items()}

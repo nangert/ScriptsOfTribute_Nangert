@@ -35,9 +35,10 @@ def main():
         bot1.bot_name,
         #bot2.bot_name,
         start_game_runner=True,
-        runs=128,
+        runs=8,
         threads=8,
         timeout=9999,
+        enable_logs="None"
     )
 
     game = Game()
@@ -50,9 +51,10 @@ def main():
         "SOISMCTS",
         #"BestMCTS3",
         start_game_runner=True,
-        runs=128,
+        runs=8,
         threads=8,
         timeout=9999,
+        enable_logs="None"
     )
 
 
