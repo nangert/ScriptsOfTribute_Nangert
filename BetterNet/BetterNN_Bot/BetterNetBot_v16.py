@@ -12,54 +12,44 @@ from datetime import datetime, timezone
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
 
-from BetterNet.BetterNN.BetterNet_v15 import BetterNetV15
+from BetterNet.BetterNN.BetterNet_v16 import BetterNetV16
+from BetterNet.utils.all_hash_moves import get_action_space
 from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v5 import game_state_to_tensor_dict_v5
-from BetterNet.utils.move_to_tensor.move_to_tensor_v3 import move_to_tensor_v3, MOVE_FEAT_DIM
+from BetterNet.utils.hash_move import hash_move
 from TributeNet.utils.file_locations import SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR, BENCHMARK_DIR
-from TributeNet.utils.model_versioning import get_model_version_path, select_osfp_opponent
 
 
-class BetterNetBot_v15(BaseAI):
-
+class BetterNetBot_v16(BaseAI):
     def __init__(
         self,
+        model_path: Path,
         bot_name: str = "BetterNet",
-        model_path: Path | None = None,
-        use_latest_model: bool = True,
+        save_trajectory: bool = True,
         evaluate: bool = False,
         is_benchmark: bool = False,
     ):
         super().__init__(bot_name=bot_name)
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model_path = model_path
         self.is_benchmark = is_benchmark
 
-        self.model = BetterNetV15(hidden_dim=128, num_moves=10)
+        self.action_space, self.hash_to_index = get_action_space()
 
-        if model_path is not None and model_path.exists():
-            self.model_path = model_path
-            self.save_trajectory_flag = True
+        model = BetterNetV16(hidden_dim=128, action_dim=self.action_space)
+        if self.model_path.exists():
+            self._load_state(model, self.model_path, self.model_path.name)
         else:
-            if use_latest_model:
-                path = get_model_version_path()
-                self.model_path = path
-                self.save_trajectory_flag = True
-            else:
-                path, is_latest = select_osfp_opponent()
-                self.model_path = path
-                self.save_trajectory_flag = bool(is_latest)
+            self.logger.warning("Primary model not found; using random initialization.")
 
-        if self.model_path and self.model_path.exists():
-            self._load_state()
-
+        self.model = model
         self.model.eval()
 
         self.trajectory: List[dict] = []
         self.winner: Optional[str] = None
+        self.save_trajectory_flag = save_trajectory
         self.evaluate = evaluate
         self.hidden = None
+
 
         # summary statistics
         self.summary_stats: dict = {}
@@ -71,16 +61,18 @@ class BetterNetBot_v15(BaseAI):
         self.summary_stats["player"] = None
         self.summary_stats["model"] = None
 
-
-    def _load_state(self):
-        if self.model_path.exists():
-            state = torch.load(self.model_path, map_location=self.device)
-            self.model.load_state_dict(state)
-            self.logger.info("Loaded %s model from %s", self.model_path.name, self.model_path)
-        else:
-            self.logger.warning(
-                "No %s model found at %s; using random initialization.", self.model_path.name, self.model_path
-            )
+    def _load_state(
+        self, model: torch.nn.Module, path: Path, name: str
+    ) -> bool:
+        if path.exists():
+            state = torch.load(path, map_location="cpu")
+            model.load_state_dict(state)
+            self.logger.info("Loaded %s model from %s", name, path)
+            return True
+        self.logger.warning(
+            "No %s model found at %s; using random initialization.", name, path
+        )
+        return False
 
     def pregame_prepare(self) -> None:
         self.trajectory.clear()
@@ -98,19 +90,7 @@ class BetterNetBot_v15(BaseAI):
         self.summary_stats["model"] = self.model_path.name if self.model_path else "Random"
 
     def select_patron(self, available_patrons: List[PatronId]) -> PatronId:
-        """
-        For now always select first available patron
-        Todo: Add Patron selection as own stage to NN
-        """
-        if available_patrons:
-            candidates = [p for p in available_patrons if p in WHITELISTED_PATRONS]
-            if candidates:
-                patron = random.choice(candidates)
-            else:
-                patron = random.choice(available_patrons)
-        else:
-            raise ValueError("No available patrons to select from.")
-
+        patron = random.choice(available_patrons)
         self.summary_stats["chosen_patrons"].append(patron.value)
         return patron
 
@@ -120,91 +100,61 @@ class BetterNetBot_v15(BaseAI):
         possible_moves: List[BasicMove],
         remaining_time: int,
     ) -> BasicMove:
-
         if self.summary_stats["player"] is None:
             self.summary_stats["player"] = game_state.current_player.player_id.name
 
-        # 1) Convert state to tensors
         obs = game_state_to_tensor_dict_v5(game_state)
-
-        # each obs[k] is a 1D or 2D tensor for B=1, so add batch‐and‐time dims:
         obs = {k: v.unsqueeze(0) for k, v in obs.items()}
-        #    → obs["player_stats"]:  [1, player_dim]
-        #       obs["patron_tensor"]: [1, 10, 2]
-        #       obs["tavern_tensor"]: [1, C, card_dim]
 
-        # 2) Build move_batch = [1, N, D]
-        move_tensors = [move_to_tensor_v3(m, game_state) for m in possible_moves]
+        hashed = [(hash_move(m, game_state), m) for m in possible_moves]
+        hashed.sort(key=lambda x: x[0])
+        legal_hashes, legal_moves = zip(*hashed)
 
-        # Max_moves -> amount of moves always get padded to 10
-        # NN outputs always 10 probabilities
-        # only first n moves are considered (n = len(possible_moves))
-        max_moves = 10
-        # MOVE_FEAT_DIM comes from move_to_tensor in utils file
-        move_dim = MOVE_FEAT_DIM
-
-        # if amount of possible moves is > 10 then truncate possible moves (end_turn is always last move)
-        if len(move_tensors) >= max_moves:
-            batch = move_tensors[:max_moves]
-        else:
-            # otherwise add padding moves
-            padding = [torch.zeros(move_dim) for _ in range(max_moves - len(move_tensors))]
-            batch = move_tensors + padding
-        move_batch = torch.stack(batch, dim=0).unsqueeze(0)  # [1, max_moves, D]
-
-        # 3) Call the model, passing in current hidden state
         with torch.no_grad():
-            logits, value, new_hidden = self.model(obs, move_batch, self.hidden)
-            #   logits: [1, max_moves], value: [1], new_hidden: LSTM state (h, c)
-
-        # 4) Save the new LSTM state for next step
+            logits, value, new_hidden = self.model(obs, self.hidden)
         self.hidden = new_hidden
 
-        # 5) Convert logits → probabilities → pick an index
-        probs = torch.softmax(logits, dim=-1).cpu().numpy().flatten()
-        # probs is always length 10 rn, possible moves probably less so only have first n as options
-        probs = probs[:len(possible_moves)]
-        total = probs.sum()
+        idxs = [self.hash_to_index[h] for h in legal_hashes]
+        legal_logits = logits.squeeze(0)[idxs]
 
-        # fallback if all probabilities in first n probs are 0, then always picks first possible move
-        if total > 0:
-            probs /= total
-            if self.evaluate:
-                idx = int(probs.argmax())
-            else:
-                idx = int(np.random.choice(len(probs), p=probs))
+        # 5) softmax & sample/argmax
+        probs = torch.softmax(legal_logits, dim=-1).cpu().numpy()
+        if probs.sum() <= 0:
+            # fallback uniform if numerical underflow
+            probs = np.ones_like(probs) / len(probs)
         else:
-            idx = 0
+            probs = probs / probs.sum()
 
-        chosen_move = possible_moves[idx]
+        if self.evaluate:
+            pick = int(probs.argmax())
+        else:
+            pick = int(np.random.choice(len(probs), p=probs))
+
+        # 6) map back to your move object
+        chosen_move = legal_moves[pick]
+        chosen_global_idx = idxs[pick]
 
         # --- TRACK PER-TURN STATISTICS ---
         self.summary_stats["move"].append(chosen_move.command.name)
 
         self.current_turn_move_count += 1
 
-        # detect "end turn" as first action
         if (chosen_move.command.name == "END_TURN"
                 and self.current_turn_move_count == 1):
             self.end_turn_first_count += 1
 
-        # when turn ends, record and reset
         if chosen_move.command.name == "END_TURN":
             self.moves_per_turn.append(self.current_turn_move_count)
             self.current_turn_move_count = 0
-        # --- end tracking ---
 
-        # 6) Save sample in episode / trajectory, discounted reward set at end of episode
         self.trajectory.append({
             "state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
-            "move_tensor": move_batch.squeeze(0).cpu(),
-            "action_idx": idx,
+            "action_idx": chosen_global_idx,
             "reward": None,
-            "old_log_prob": float(np.log(probs[idx] + 1e-8)),
+            "old_log_prob": float(np.log(probs[pick] + 1e-8)),
             "value_estimate": value.item()
         })
 
-        # return chosen move to GameRunner
         return chosen_move
 
     def game_end(self, end_game_state: EndGameState, final_state: GameState) -> None:
@@ -220,10 +170,11 @@ class BetterNetBot_v15(BaseAI):
         for turn_idx, cnt in enumerate(self.moves_per_turn):
             turn_indices += [turn_idx] * cnt
 
-        γ = 0.99
-        for move_idx, step in enumerate(self.trajectory):
-            turn_idx = turn_indices[move_idx]
-            discount_multiplier = γ ** (total_turns - 1 - turn_idx)
+        γ = 1.0
+        N = len(self.trajectory)
+
+        for t, step in enumerate(self.trajectory):
+            discount_multiplier = γ ** (N - 1 - t)
             step["reward"] = final_reward * discount_multiplier
 
         self.summary_stats["finished_at"] = datetime.now(timezone.utc).isoformat()
@@ -238,6 +189,9 @@ class BetterNetBot_v15(BaseAI):
             self.save_summary_stats()
 
     def save_trajectory(self) -> None:
+        if self.is_benchmark:
+            return
+
         buffer_dir = BUFFER_DIR
         buffer_dir.mkdir(parents=True, exist_ok=True)
         filename = buffer_dir / f"{self.bot_name}{MODEL_VERSION}{uuid.uuid4().hex}.pkl"

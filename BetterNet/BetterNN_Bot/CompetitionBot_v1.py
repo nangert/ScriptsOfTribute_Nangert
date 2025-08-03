@@ -29,12 +29,14 @@ class CompetitionBot_v1(BaseAI):
         evaluate: bool = False,
         patron_choice: bool = True,
         instant_moves: bool = True,
+        remove_end_turn: bool = True,
     ):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model_path = model_path
         self.patron_choice = patron_choice
         self.instant_moves = instant_moves
+        self.remove_end_turn = remove_end_turn
 
         model = BetterNetV13(hidden_dim=128, num_moves=10)
         if self.model_path.exists():
@@ -78,6 +80,9 @@ class CompetitionBot_v1(BaseAI):
         possible_moves: List[BasicMove],
         remaining_time: int,
     ) -> BasicMove:
+        if self.remove_end_turn and len(possible_moves) > 1:
+            possible_moves.pop(-1)
+
         if self.instant_moves:
             if any(isinstance(m, SimpleCardMove) for m in possible_moves):
                 card_moves = [m for m in possible_moves if isinstance(m, SimpleCardMove)]
