@@ -11,11 +11,14 @@ from datetime import datetime, timezone
 
 from scripts_of_tribute.base_ai import BaseAI, PatronId, GameState, BasicMove
 from scripts_of_tribute.board import EndGameState
+from scripts_of_tribute.enums import PlayerEnum
+from scripts_of_tribute.move import SimplePatronMove, SimpleCardMove
 
 from BetterNet.BetterNN.BetterNet_v13 import BetterNetV13
 from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v5 import game_state_to_tensor_dict_v5
 from BetterNet.utils.move_to_tensor.move_to_tensor_v3 import move_to_tensor_v3, MOVE_FEAT_DIM
-from TributeNet.utils.file_locations import WHITELISTED_PATRONS, SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR, BENCHMARK_DIR
+from TributeNet.utils.enums.InstantPlayCards import get_card_from_uniqueId, INSTANT_PLAY_IDS
+from TributeNet.utils.file_locations import PREFERRED_ORDER
 
 
 class CompetitionBot_v1(BaseAI):
@@ -24,10 +27,14 @@ class CompetitionBot_v1(BaseAI):
         model_path: Path,
         bot_name: str = "BetterNet",
         evaluate: bool = False,
+        patron_choice: bool = True,
+        instant_moves: bool = True,
     ):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model_path = model_path
+        self.patron_choice = patron_choice
+        self.instant_moves = instant_moves
 
         model = BetterNetV13(hidden_dim=128, num_moves=10)
         if self.model_path.exists():
@@ -58,15 +65,12 @@ class CompetitionBot_v1(BaseAI):
         pass
 
     def select_patron(self, available_patrons: List[PatronId]) -> PatronId:
-        if available_patrons:
-            candidates = [p for p in available_patrons if p in WHITELISTED_PATRONS]
-            if candidates:
-                patron = random.choice(candidates)
-            else:
-                patron = random.choice(available_patrons)
-        else:
-            raise ValueError("No available patrons to select from.")
-        return patron
+        if self.patron_choice:
+            for pref in PREFERRED_ORDER:
+                if pref in available_patrons:
+                    return pref
+
+        return random.choice(available_patrons)
 
     def play(
         self,
@@ -74,6 +78,41 @@ class CompetitionBot_v1(BaseAI):
         possible_moves: List[BasicMove],
         remaining_time: int,
     ) -> BasicMove:
+        if self.instant_moves:
+            if any(isinstance(m, SimpleCardMove) for m in possible_moves):
+                card_moves = [m for m in possible_moves if isinstance(m, SimpleCardMove)]
+                for m in card_moves:
+                    cid = get_card_from_uniqueId(m, game_state)
+                    if cid in INSTANT_PLAY_IDS:
+                        return m
+
+            if any(isinstance(m, SimplePatronMove) for m in possible_moves):
+                patron_states = game_state.patron_states.patrons
+                patron_states.pop(PatronId.TREASURY)
+
+                patron_moves = [m for m in possible_moves if isinstance(m, SimplePatronMove) and m.patronId != PatronId.TREASURY]
+
+                player1_patrons = [ patron for patron, owner in patron_states.items() if owner == PlayerEnum.PLAYER1]
+                player2_patrons = [ patron for patron, owner in patron_states.items() if owner == PlayerEnum.PLAYER2]
+
+                if len(player2_patrons) > 2:
+                    move = next(
+                        (m for m in patron_moves if m.patronId in player2_patrons),
+                        None
+                    )
+                    if move is not None:
+                        # return move
+                        pass
+
+
+                if len(player1_patrons) > 2:
+                    move = next(
+                        (m for m in patron_moves if m.patronId not in player1_patrons),
+                        None
+                    )
+                    if move is not None:
+                        return move
+
         obs = game_state_to_tensor_dict_v5(game_state)
 
         obs = {k: v.unsqueeze(0) for k, v in obs.items()}
