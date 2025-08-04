@@ -14,14 +14,10 @@ class RolloutWorker_v15:
     """
     def __init__(
         self,
-        bot1_model_path: Path,
-        bot2_model_path: Optional[Path],
         num_games: int = 10,
         num_threads: int = 8
     ):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.bot1_model_path = bot1_model_path
-        self.bot2_model_path = bot2_model_path
         self.num_games = num_games
         self.num_threads = num_threads
 

@@ -10,7 +10,6 @@ from BetterNet.BetterNN.BetterNet_v15 import BetterNetV15
 from BetterNet.ReplayBuffer.ReplayBuffer_v15 import ReplayBuffer_v15
 from TributeNet.utils.file_locations import MODEL_PREFIX, EXTENSION
 
-# Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 MODEL_PREFIX = MODEL_PREFIX
@@ -18,29 +17,21 @@ EXTENSION = EXTENSION
 
 
 class Trainer_v15:
-    """
-    Handles model loading, training over replay buffer, and saving.
-    """
-
     def __init__(
         self,
         model_path: Path,
         buffer_path: Path,
         save_path: Path,
-        wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
-        lr: float = 1e-4,
-        epochs = 5
+        lr: float = 1e-5,
+        epochs = 2
     ) -> None:
-        # Logger
         self.logger = logging.getLogger(self.__class__.__name__)
 
         self.model_path = model_path
         self.buffer_path = buffer_path
         self.save_path = save_path
-        self.wandb_run = wandb_run
         self.epochs = epochs
 
-        # Initialize model
         self.model = BetterNetV15(hidden_dim=128, num_moves=10).to(device)
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=device)
@@ -49,20 +40,17 @@ class Trainer_v15:
         else:
             self.logger.info("No existing model found; initializing new model.")
 
-        # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
-        # Replay buffer
         self.buffer = ReplayBuffer_v15(self.buffer_path)
 
     def train(
             self,
-            batch_size: int = 64,
-            clip_eps: float = 0.1,
+            batch_size: int = 32,
+            clip_eps: float = 0.2,
             value_coeff: float = 0.5,
             entropy_coeff: float = 0.02,
     ):
-        # 1) Load one batch of B episodes (e.g. B=128) from the buffer
         obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
             self.buffer.get_all()
         B, T = actions_all.shape
@@ -73,30 +61,23 @@ class Trainer_v15:
         lengths_all = lengths_all.to(device)  # [B]
         mask_all = (torch.arange(T, device=device).unsqueeze(0) < lengths_all.unsqueeze(1)).float()  # [B, T]
 
-        step = 0
         for epoch in range(1, self.epochs + 1):
             perm = torch.randperm(B, device=device)
 
             for start in range(0, B, batch_size):
                 batch_inds = perm[start: start + batch_size]
-                # Move to GPU *before* indexing
+
                 obs_batch = {k: v.to(device)[batch_inds] for k, v in obs_all.items()}  # [B', T, …]
                 actions_batch = actions_all.to(device)[batch_inds]  # [B', T]
                 returns_batch = returns_all.to(device)[batch_inds]  # [B', T]
                 moves_batch = moves_all.to(device)[batch_inds]  # [B', T, N, D]
                 oldlp_batch = old_lp_all.to(device)[batch_inds]  # [B', T]
-                oldval_batch = old_val_all.to(device)[batch_inds]  # [B', T]
-                lengths_batch = lengths_all[batch_inds]  # [B']
                 mask_batch = mask_all[batch_inds]  # [B', T]
 
                 Bp = actions_batch.size(0)
 
-                # 2) Forward: get LSTM outputs and value predictions
                 final_hidden_all, values = self.model(obs_batch, moves_batch)
-                #   lstm_out: [B', T, 256]
-                #   values:   [B', T]
 
-                # 3b) Encode all moves: flatten (B'*T, N, D) → embed → reshape to [B', T, N, 128]
                 Bt = Bp * T
                 N = moves_batch.size(2)
                 Dm = moves_batch.size(3)
@@ -157,18 +138,6 @@ class Trainer_v15:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
                 self.optimizer.zero_grad()
-
-                if self.wandb_run:
-                    self.wandb_run.log({
-                        "policy_loss": pol_loss.item(),
-                        "value_loss": value_loss.item(),
-                        "entropy": ent.item(),
-                        "epoch": epoch,
-                        "step": step,
-                    })
-
-                step += 1
-
             self.logger.info(
                 "Epoch %d/%d complete | total_loss=%.4f | pol_loss=%.4f | val_loss=%.4f | ent=%.4f",
                 epoch, self.epochs, total_loss.item(), pol_loss.item(), value_loss.item(), ent.item()
@@ -179,13 +148,9 @@ class Trainer_v15:
         self.buffer.archive_buffer()
 
     def _save_model(self) -> None:
-        """
-        Saves the model with a new version number to avoid overwriting.
-        """
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
         model_dir = self.save_path
 
-        # Find all existing model files
         existing_models = list(model_dir.glob(f"{MODEL_PREFIX}*{EXTENSION}"))
         if existing_models:
             versions = [

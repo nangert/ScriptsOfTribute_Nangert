@@ -24,20 +24,12 @@ BASE_FILENAME = BUFFER_FILE_NAME
 GAMES_PER_CYCLE = 128
 THREADS = 8
 
-# Directories for logging
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-LOG_FILE = LOG_DIR / "data_generation.log"
-
 logging.basicConfig(
-    level=logging.INFO,
-    format="[%(asctime)s] %(name)s %(levelname)s: %(message)s",
-    handlers=[
-        logging.FileHandler(LOG_FILE),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger("DataGeneration")
+        level=logging.INFO,
+        format="[%(asctime)s] %(name)s %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+logger = logging.getLogger("TrainerLoop")
 
 OSFP_LATEST_PROB = 0.0
 HISTORY_DEPTH = 5
@@ -71,68 +63,19 @@ def main() -> None:
     """
     while True:
         try:
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            #opponent_model_path = select_opponent_model()
-
-            logger.info(f"Primary Model: {primary_model_path}")
-            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
-
             worker = RolloutWorker_v15(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
                 num_games=GAMES_PER_CYCLE,
                 num_threads=THREADS
             )
             worker.run()
-
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_osfp_opponent()
-            logger.info(f"Primary Model: {primary_model_path}")
-            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
-
-            worker = RolloutWorker_v15(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
-                num_games=int(GAMES_PER_CYCLE / 2),
-                num_threads=THREADS
-            )
-            worker.run()
-
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_osfp_opponent()
-            logger.info(f"Primary Model: {primary_model_path}")
-            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
-
-            worker = RolloutWorker_v15(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
-                num_games=int(GAMES_PER_CYCLE / 2),
-                num_threads=THREADS
-            )
-            worker.run()
-
-            benchmark = Benchmark(
-                num_games=64,
-                num_threads=8
-            )
-            benchmark.run()
 
             merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename=BASE_FILENAME)
 
             merged_file = merge_game_summaries(
                 summary_dir=SUMMARY_DIR,
                 merged_summary_dir=MERGED_SUMMARY_DIR,
-                used_summary_dir=USED_SUMMARY_DIR,
                 base_filename=SUMMARY_FILE_NAME
             )
-
-
-            # Write generation summary log
-            with open(LOG_DIR / "generation_summary.log", "a") as f:
-                f.write(f"{datetime.now()}: Played {GAMES_PER_CYCLE} games. "
-                        f"Primary: {primary_model_path.name}, "
-                        f"Opponent: {opponent_model_path.name if opponent_model_path else 'RandomBot'}\n")
 
             logger.info(f"Finished {GAMES_PER_CYCLE} games. \n")
 
