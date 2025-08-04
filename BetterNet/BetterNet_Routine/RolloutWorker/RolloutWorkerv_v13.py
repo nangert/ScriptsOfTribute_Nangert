@@ -46,7 +46,6 @@ class RolloutWorker_v13:
         game.run(
             bot1.bot_name,
             bot2.bot_name,
-            #"SOISMCTS",
             start_game_runner=True,
             runs=self.num_games,
             threads=self.num_threads,
@@ -57,7 +56,6 @@ class RolloutWorker_v13:
         game.register_bot(bot2)
         game.register_bot(bot1)
         game.run(
-            #"SOISMCTS",
             bot2.bot_name,
             bot1.bot_name,
             start_game_runner=True,

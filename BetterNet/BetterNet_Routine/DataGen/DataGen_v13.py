@@ -21,7 +21,7 @@ MODEL_PREFIX = MODEL_PREFIX
 BASE_FILENAME = BUFFER_FILE_NAME
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 128
 THREADS = 8
 
 # Directories for logging
@@ -82,32 +82,6 @@ def main() -> None:
                 bot1_model_path=primary_model_path,
                 bot2_model_path=opponent_model_path,
                 num_games=GAMES_PER_CYCLE,
-                num_threads=THREADS
-            )
-            worker.run()
-
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_osfp_opponent()
-            logger.info(f"Primary Model: {primary_model_path}")
-            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
-
-            worker = RolloutWorker_v13(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
-                num_games=int(GAMES_PER_CYCLE / 2),
-                num_threads=THREADS
-            )
-            worker.run()
-
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_osfp_opponent()
-            logger.info(f"Primary Model: {primary_model_path}")
-            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
-
-            worker = RolloutWorker_v13(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
-                num_games=int(GAMES_PER_CYCLE / 2),
                 num_threads=THREADS
             )
             worker.run()
