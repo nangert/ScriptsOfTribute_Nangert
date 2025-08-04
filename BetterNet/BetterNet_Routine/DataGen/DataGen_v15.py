@@ -11,17 +11,14 @@ from TributeNet.Training.Benchmark import Benchmark
 from TributeNet.utils.file_locations import BUFFER_DIR, SAVED_BUFFER_DIR, MODEL_DIR, MODEL_PREFIX, BUFFER_FILE_NAME, \
     SUMMARY_DIR, MERGED_SUMMARY_DIR, USED_SUMMARY_DIR, SUMMARY_FILE_NAME
 
-# Directories for saving game trajectories
 GAME_BUFFERS_DIR = BUFFER_DIR
 MERGED_BUFFER_PATH = SAVED_BUFFER_DIR
 
-# Directory for loading current model
 MODEL_DIR = MODEL_DIR
 MODEL_PREFIX = MODEL_PREFIX
 BASE_FILENAME = BUFFER_FILE_NAME
 
-# Games generated per GameRunner instance
-GAMES_PER_CYCLE = 128
+GAMES_PER_CYCLE = 64
 THREADS = 8
 
 logging.basicConfig(
@@ -31,36 +28,8 @@ logging.basicConfig(
     )
 logger = logging.getLogger("TrainerLoop")
 
-OSFP_LATEST_PROB = 0.0
-HISTORY_DEPTH = 5
-
-def select_osfp_opponent() -> Path | None:
-    latest = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-    if latest is None:
-        return None
-
-    # Collect historical checkpoints beyond the latest
-    history = [
-        get_model_version_path(MODEL_DIR, MODEL_PREFIX, offset=i)
-        for i in range(2, HISTORY_DEPTH + 1)
-    ]
-    history = [h for h in history if h is not None]
-
-    if random.random() < OSFP_LATEST_PROB:
-        return latest
-    elif history:
-        return random.choice(history)
-    else:
-        # Fallback to latest if no history exists
-        return latest
-
 
 def main() -> None:
-    """
-    Starts loop to generate games
-    Loads model-paths for both bots, runs rollout worker with loaded model paths
-    After generating set of games merges trajectories into single file
-    """
     while True:
         try:
             worker = RolloutWorker_v15(
@@ -76,6 +45,12 @@ def main() -> None:
                 merged_summary_dir=MERGED_SUMMARY_DIR,
                 base_filename=SUMMARY_FILE_NAME
             )
+
+            benchmark = Benchmark(
+                num_games=64,
+                num_threads=8
+            )
+            benchmark.run()
 
             logger.info(f"Finished {GAMES_PER_CYCLE} games. \n")
 

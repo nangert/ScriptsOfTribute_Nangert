@@ -1,6 +1,4 @@
 ﻿import logging
-from pathlib import Path
-from typing import Optional
 
 from scripts_of_tribute.game import Game
 
@@ -8,10 +6,6 @@ from BetterNet.BetterNN_Bot.BetterNetBot_v15 import BetterNetBot_v15
 
 
 class RolloutWorker_v15:
-    """
-    Rollout worker for loading models from file_paths and running GameRunner with loaded models
-    bot2_model_path is optional, if None then selects RandomBot instead of NN-model
-    """
     def __init__(
         self,
         num_games: int = 10,
@@ -23,7 +17,6 @@ class RolloutWorker_v15:
 
 
     def run(self) -> None:
-        """Execute the configured number of self-play games."""
         self.logger.info("Starting %d games", self.num_games)
 
         bot1 = BetterNetBot_v15(bot_name='BetterNet', evaluate=False, use_latest_model=True)
@@ -35,6 +28,18 @@ class RolloutWorker_v15:
         game.run(
             bot1.bot_name,
             bot2.bot_name,
+            start_game_runner=True,
+            runs=self.num_games,
+            threads=self.num_threads,
+            timeout=999
+        )
+
+        game = Game()
+        game.register_bot(bot2)
+        game.register_bot(bot1)
+        game.run(
+            bot2.bot_name,
+            bot1.bot_name,
             start_game_runner=True,
             runs=self.num_games,
             threads=self.num_threads,

@@ -36,7 +36,7 @@ class BetterNetBot_v15(BaseAI):
         self.model_path = model_path
         self.is_benchmark = is_benchmark
 
-        self.model = BetterNetV15(hidden_dim=128, num_moves=10)
+        self.model = BetterNetV15(hidden_dim=128)
 
         if model_path is not None and model_path.exists():
             self.model_path = model_path
@@ -127,7 +127,7 @@ class BetterNetBot_v15(BaseAI):
         move_batch = torch.stack(batch, dim=0).unsqueeze(0)
 
         with torch.no_grad():
-            logits, value, new_hidden = self.model(obs, move_batch, self.hidden)
+            logits, value, _, _, new_hidden = self.model(obs, move_batch, self.hidden)
 
         self.hidden = new_hidden
 

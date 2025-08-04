@@ -1,19 +1,11 @@
-﻿import logging
+﻿import torch, torch.nn.functional as F, torch.optim as optim, logging
 from pathlib import Path
-from typing import Optional
-
-import torch
-import torch.optim as optim
-import wandb
 
 from BetterNet.BetterNN.BetterNet_v15 import BetterNetV15
 from BetterNet.ReplayBuffer.ReplayBuffer_v15 import ReplayBuffer_v15
 from TributeNet.utils.file_locations import MODEL_PREFIX, EXTENSION
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-MODEL_PREFIX = MODEL_PREFIX
-EXTENSION = EXTENSION
 
 
 class Trainer_v15:
@@ -23,130 +15,160 @@ class Trainer_v15:
         buffer_path: Path,
         save_path: Path,
         lr: float = 1e-5,
-        epochs = 2
+        epochs: int = 2,
+        gamma_e: float = 0.999,
+        gamma_i: float = 0.99,
     ) -> None:
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger  = logging.getLogger(self.__class__.__name__)
+        self.epochs  = epochs
+        self.gamma_e, self.gamma_i = gamma_e, gamma_i
 
-        self.model_path = model_path
-        self.buffer_path = buffer_path
-        self.save_path = save_path
-        self.epochs = epochs
+        self.model = BetterNetV15(hidden_dim=128, num_cards=256).to(device)
+        if model_path.exists():
+            self.model.load_state_dict(torch.load(model_path, map_location=device))
+            self.logger.info("Loaded model from %s", model_path.name)
 
-        self.model = BetterNetV15(hidden_dim=128, num_moves=10).to(device)
-        if self.model_path.exists():
-            state = torch.load(self.model_path, map_location=device)
-            self.model.load_state_dict(state)
-            self.logger.info("Loaded model from %s", self.model_path.name)
-        else:
-            self.logger.info("No existing model found; initializing new model.")
-
+        # single optimiser for policy + critic + predictor
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        self.buffer    = ReplayBuffer_v15(buffer_path)
 
-        self.buffer = ReplayBuffer_v15(self.buffer_path)
+        # running std-dev of intrinsic *returns*
+        self.rms_mean, self.rms_var, self.rms_count = 0., 1., 1e-4
 
-    def train(
-            self,
-            batch_size: int = 32,
-            clip_eps: float = 0.2,
-            value_coeff: float = 0.5,
-            entropy_coeff: float = 0.02,
-    ):
-        obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
-            self.buffer.get_all()
+        self.save_path = save_path
+
+    # --------------------------------------------------------------
+    def _update_rms(self, x: torch.Tensor):
+        """Welford update for running variance."""
+        b_mean = x.mean().item()
+        b_var  = x.var(unbiased=False).item()
+        b_cnt  = x.numel()
+
+        delta   = b_mean - self.rms_mean
+        tot_cnt = self.rms_count + b_cnt
+
+        new_mean = self.rms_mean + delta * b_cnt / tot_cnt
+        m_a = self.rms_var * self.rms_count
+        m_b = b_var * b_cnt
+        M2  = m_a + m_b + delta**2 * self.rms_count * b_cnt / tot_cnt
+        new_var   = M2 / tot_cnt
+
+        self.rms_mean, self.rms_var, self.rms_count = new_mean, new_var, tot_cnt
+
+    # --------------------------------------------------------------
+    def train(self, batch_size=32, clip_eps=0.2,
+              value_coeff=0.5, entropy_coeff=0.02,
+              predictor_coeff=1.0):
+        (obs_all, actions_all, returns_all, moves_all,
+         oldlp_all, old_val_all, lengths_all) = self.buffer.get_all()
+
         B, T = actions_all.shape
-        self.logger.info("Training on %d episodes, each padded to length %d, %d PPO epochs",
-                         B, T, self.epochs)
-
-        device = next(self.model.parameters()).device
-        lengths_all = lengths_all.to(device)  # [B]
-        mask_all = (torch.arange(T, device=device).unsqueeze(0) < lengths_all.unsqueeze(1)).float()  # [B, T]
+        mask_all = (torch.arange(T, device=device).unsqueeze(0) <
+                    lengths_all.unsqueeze(1).to(device)).float()  # [B,T]
 
         for epoch in range(1, self.epochs + 1):
             perm = torch.randperm(B, device=device)
-
             for start in range(0, B, batch_size):
-                batch_inds = perm[start: start + batch_size]
+                idx = perm[start:start + batch_size]
+                obs   = {k: v.to(device)[idx] for k, v in obs_all.items()}
+                acts  = actions_all.to(device)[idx]
+                rets  = returns_all.to(device)[idx]          # extrinsic G_t
+                moves = moves_all.to(device)[idx]
+                oldlp = oldlp_all.to(device)[idx]
+                mask  = mask_all[idx]
 
-                obs_batch = {k: v.to(device)[batch_inds] for k, v in obs_all.items()}  # [B', T, …]
-                actions_batch = actions_all.to(device)[batch_inds]  # [B', T]
-                returns_batch = returns_all.to(device)[batch_inds]  # [B', T]
-                moves_batch = moves_all.to(device)[batch_inds]  # [B', T, N, D]
-                oldlp_batch = old_lp_all.to(device)[batch_inds]  # [B', T]
-                mask_batch = mask_all[batch_inds]  # [B', T]
+                Bp = acts.size(0)
 
-                Bp = actions_batch.size(0)
+                # ————————— forward —————————
+                hid, v_ext, v_int, int_reward = self.model(obs, moves)  # [B',T,(…) ]
 
-                final_hidden_all, values = self.model(obs_batch, moves_batch)
+                # ————————— intrinsic returns —————————
+                int_ret = torch.zeros_like(int_reward)
+                running = torch.zeros(Bp, device=device)
+                for t in reversed(range(T)):
+                    running = int_reward[:, t] + self.gamma_i * running
+                    int_ret[:, t] = running
+                    running = running * mask[:, t]
 
-                Bt = Bp * T
-                N = moves_batch.size(2)
-                Dm = moves_batch.size(3)
-                move_flat = moves_batch.view(Bt, N, Dm)  # [B'*T, N, Dm]
-                move_emb_flat = self.model.move_encoder(move_flat)  # [B'*T, N, 128]
-                move_emb_all = move_emb_flat.view(Bp, T, N, -1)  # [B', T, N, 128]
+                # normalise curiosity returns
+                self._update_rms(int_ret)
+                int_ret_norm = int_ret / (self.rms_var**0.5 + 1e-8)
 
-                # 3c) For each (b,t), dot move_emb_all[b,t] (N×128) with final_hidden_all[b,t] (128)
-                # Flatten to do one big batched matmul:
-                H_flat = final_hidden_all.view(Bt, 128).unsqueeze(2)  # [B'*T, 128, 1]
-                M_flat = move_emb_all.view(Bt, N, 128)  # [B'*T, N, 128]
-                logits_flat = torch.bmm(M_flat, H_flat).squeeze(2)  # [B'*T, N]
-                logits_all = logits_flat.view(Bp, T, N)  # [B', T, N]
+                # ————————— advantages —————————
+                adv_e = (rets - v_ext).detach()
+                adv_i = (int_ret_norm - v_int).detach()
 
-                # 4) Build distributions & gather log‐probs for the *actions that were taken*:
-                dist_all = torch.distributions.Categorical(logits=logits_all.view(-1, N))  # [B'*T, N]
-                acts_flat = actions_batch.view(-1)  # [B'*T]
-                logp_flat = dist_all.log_prob(acts_flat)  # [B'*T]
+                # normalise each stream separately (mask-aware)
+                def normalise(a):
+                    m   = (a * mask).sum() / mask.sum()
+                    var = ((a - m) ** 2 * mask).sum() / mask.sum()
+                    return (a - m) / (var.sqrt() + 1e-8)
 
-                # 5) Compute “old” log‐probs (from buffer) and advantage, for all (b,t):
-                oldlp_flat = oldlp_batch.view(-1)  # [B'*T]
-                ret_flat = returns_batch.view(-1)  # [B'*T]
-                val_flat = values.view(-1)  # [B'*T]
-                adv_flat = ret_flat - val_flat  # [B'*T]
+                adv_e_n = normalise(adv_e)
+                adv_i_n = normalise(adv_i)
 
-                # 6) Mask out padded timesteps:
-                mask_flat = mask_batch.view(-1)  # [B'*T] of 0/1
-                logp_flat = logp_flat * mask_flat
-                oldlp_flat = oldlp_flat * mask_flat
-                adv_flat = adv_flat * mask_flat
+                adv_tot = adv_e_n + adv_i_n      # [B',T]
 
-                # 7) Normalize advantages over all valid (b,t):
-                adv_mean = adv_flat.sum() / mask_flat.sum()
-                adv_var = ((adv_flat - adv_mean).pow(2) * mask_flat).sum() / mask_flat.sum()
-                adv_std = torch.sqrt(adv_var + 1e-8)
-                adv_norm = (adv_flat - adv_mean) / adv_std  # [B'*T]
+                # ————————— policy loss —————————
+                Bt, N = Bp * T, moves.size(2)
 
-                # 8) PPO ratio and clipped objective (all (b,t)):
-                ratio_flat = torch.exp(logp_flat - oldlp_flat)  # [B'*T]
-                clipped_flat = torch.clamp(ratio_flat, 1 - clip_eps, 1 + clip_eps)
-                pol_loss_flat = -torch.min(ratio_flat * adv_norm, clipped_flat * adv_norm)  # [B'*T]
+                hid_flat = hid.view(Bt, 128).unsqueeze(2)  # [Bt,128,1]
+                move_emb_flat = self.model.move_encoder(
+                    moves.view(Bt, N, -1)  # [Bt,N,D]
+                )  # [Bt,N,128]
 
+                logits_flat = torch.bmm(move_emb_flat, hid_flat)  # [Bt,N,1]
+                logits_flat = logits_flat.squeeze(2)  # [Bt,N]
+                dist = torch.distributions.Categorical(logits=logits_flat)
+
+                logp  = dist.log_prob(acts.view(-1))
+                ratio = torch.exp(logp - oldlp.view(-1))
+                adv   = adv_tot.view(-1)
+                mask_flat = mask.view(-1)
+
+                pol_loss_flat = -torch.min(
+                    ratio * adv,
+                    torch.clamp(ratio, 1 - clip_eps, 1 + clip_eps) * adv
+                )
                 pol_loss = (pol_loss_flat * mask_flat).sum() / mask_flat.sum()
 
-                # 9) Value loss (MSE over all valid (b,t)):
-                mse_all = (val_flat - ret_flat).pow(2)  # [B'*T]
-                value_loss = (mse_all * mask_flat).sum() / mask_flat.sum()
+                # ————————— value loss —————————
+                mse_e = (v_ext - rets) ** 2
+                mse_i = (v_int - int_ret_norm) ** 2
+                value_loss = ((mse_e + mse_i) * mask).sum() / mask.sum()
 
-                # 10) Entropy bonus (over all valid (b,t)):
-                entropy_flat = dist_all.entropy()  # [B'*T]
-                ent = (entropy_flat * mask_flat).sum() / mask_flat.sum()
+                # ————————— predictor loss —————————
+                #   NB: hid is detached *inside* model, so this
+                #   only updates rnd_predictor parameters.
+                tgt, pred = self.model._rnd_features(hid)
+                pred_loss = F.mse_loss(pred, tgt)
 
-                # 11) Total loss and backward
-                total_loss = pol_loss + value_coeff * value_loss - entropy_coeff * ent
+                # ————————— entropy —————————
+                ent = dist.entropy()
+                ent = (ent * mask_flat).sum() / mask_flat.sum()
+
+                # ————————— total —————————
+                total_loss = (pol_loss +
+                              value_coeff * value_loss -
+                              entropy_coeff * ent +
+                              predictor_coeff * pred_loss)
+
                 total_loss.backward()
-
-                # 12) Gradient clipping + step
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
                 self.optimizer.step()
                 self.optimizer.zero_grad()
+
             self.logger.info(
-                "Epoch %d/%d complete | total_loss=%.4f | pol_loss=%.4f | val_loss=%.4f | ent=%.4f",
-                epoch, self.epochs, total_loss.item(), pol_loss.item(), value_loss.item(), ent.item()
+                "epoch %d/%d | total %.4f  pol %.4f  V %.4f  pred %.4f  ent %.4f",
+                epoch, self.epochs,
+                total_loss.item(), pol_loss.item(),
+                value_loss.item(), pred_loss.item(), ent.item()
             )
 
-        # After all epochs on this batch:
         self._save_model()
         self.buffer.archive_buffer()
 
+    # --------------------------------------------------------------
     def _save_model(self) -> None:
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
         model_dir = self.save_path
