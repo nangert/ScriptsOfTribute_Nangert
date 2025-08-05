@@ -23,9 +23,9 @@ class BetterNetBot_v15(BaseAI):
 
     def __init__(
         self,
+        model_path: Path,
         bot_name: str = "BetterNet",
-        model_path: Path | None = None,
-        use_latest_model: bool = True,
+        save_trajectory: bool = True,
         evaluate: bool = False,
         is_benchmark: bool = False,
     ):
@@ -35,25 +35,15 @@ class BetterNetBot_v15(BaseAI):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model_path = model_path
         self.is_benchmark = is_benchmark
+        self.save_trajectory_flag = save_trajectory
 
-        self.model = BetterNetV15(hidden_dim=128)
-
-        if model_path is not None and model_path.exists():
-            self.model_path = model_path
-            self.save_trajectory_flag = True
+        model = BetterNetV15(hidden_dim=128)
+        if self.model_path.exists():
+            self._load_state(model, self.model_path, self.model_path.name)
         else:
-            if use_latest_model:
-                path = get_model_version_path()
-                self.model_path = path
-                self.save_trajectory_flag = True
-            else:
-                path, is_latest = select_osfp_opponent()
-                self.model_path = path
-                self.save_trajectory_flag = bool(is_latest)
+            self.logger.warning("Primary model not found; using random initialization.")
 
-        if self.model_path and self.model_path.exists():
-            self._load_state()
-
+        self.model = model
         self.model.eval()
 
         self.trajectory: List[dict] = []
@@ -71,16 +61,22 @@ class BetterNetBot_v15(BaseAI):
         self.summary_stats["player"] = None
         self.summary_stats["model"] = None
 
-
-    def _load_state(self):
-        if self.model_path.exists():
-            state = torch.load(self.model_path, map_location=self.device)
-            self.model.load_state_dict(state)
-            self.logger.info("Loaded %s model from %s", self.model_path.name, self.model_path)
-        else:
-            self.logger.warning(
-                "No %s model found at %s; using random initialization.", self.model_path.name, self.model_path
-            )
+    def _load_state(
+            self, model: torch.nn.Module, path: Path, name: str
+    ) -> bool:
+        """
+        Helper to load model state dict if available.
+        Returns True if loaded, False otherwise.
+        """
+        if path.exists():
+            state = torch.load(path, map_location="cpu")
+            model.load_state_dict(state)
+            self.logger.info("Loaded %s model from %s", name, path)
+            return True
+        self.logger.warning(
+            "No %s model found at %s; using random initialization.", name, path
+        )
+        return False
 
     def pregame_prepare(self) -> None:
         self.trajectory.clear()

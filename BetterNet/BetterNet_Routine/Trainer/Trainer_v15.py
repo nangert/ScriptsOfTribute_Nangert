@@ -16,7 +16,7 @@ class Trainer_v15:
         save_path: Path,
         lr: float = 1e-5,
         epochs: int = 2,
-        gamma_e: float = 1.0,
+        gamma_e: float = 0.999,
         gamma_i: float = 0.99,
     ) -> None:
         self.logger  = logging.getLogger(self.__class__.__name__)
