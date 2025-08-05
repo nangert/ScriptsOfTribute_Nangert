@@ -1,15 +1,11 @@
 ﻿import logging
-import random
-from datetime import datetime
-from pathlib import Path
 
 from BetterNet.BetterNet_Routine.RolloutWorker.RolloutWorkerv_v15 import RolloutWorker_v15
 from BetterNet.utils.merge_game_summaries import merge_game_summaries
 from BetterNet.utils.merge_replay_buffers import merge_replay_buffers
-from BetterNet.utils.model_versioning import get_latest_model_path, get_model_version_path
 from TributeNet.Training.Benchmark import Benchmark
 from TributeNet.utils.file_locations import BUFFER_DIR, SAVED_BUFFER_DIR, MODEL_DIR, MODEL_PREFIX, BUFFER_FILE_NAME, \
-    SUMMARY_DIR, MERGED_SUMMARY_DIR, USED_SUMMARY_DIR, SUMMARY_FILE_NAME
+    SUMMARY_DIR, MERGED_SUMMARY_DIR, SUMMARY_FILE_NAME
 
 GAME_BUFFERS_DIR = BUFFER_DIR
 MERGED_BUFFER_PATH = SAVED_BUFFER_DIR
@@ -18,7 +14,7 @@ MODEL_DIR = MODEL_DIR
 MODEL_PREFIX = MODEL_PREFIX
 BASE_FILENAME = BUFFER_FILE_NAME
 
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 128
 THREADS = 8
 
 logging.basicConfig(

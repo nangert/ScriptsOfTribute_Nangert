@@ -16,14 +16,14 @@ class Trainer_v15:
         save_path: Path,
         lr: float = 1e-5,
         epochs: int = 2,
-        gamma_e: float = 0.999,
+        gamma_e: float = 1.0,
         gamma_i: float = 0.99,
     ) -> None:
         self.logger  = logging.getLogger(self.__class__.__name__)
         self.epochs  = epochs
         self.gamma_e, self.gamma_i = gamma_e, gamma_i
 
-        self.model = BetterNetV15(hidden_dim=128, num_cards=256).to(device)
+        self.model = BetterNetV15(hidden_dim=128).to(device)
         if model_path.exists():
             self.model.load_state_dict(torch.load(model_path, map_location=device))
             self.logger.info("Loaded model from %s", model_path.name)

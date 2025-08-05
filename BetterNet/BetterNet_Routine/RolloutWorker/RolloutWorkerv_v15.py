@@ -4,7 +4,6 @@ from scripts_of_tribute.game import Game
 
 from BetterNet.BetterNN_Bot.BetterNetBot_v15 import BetterNetBot_v15
 
-
 class RolloutWorker_v15:
     def __init__(
         self,
@@ -20,7 +19,7 @@ class RolloutWorker_v15:
         self.logger.info("Starting %d games", self.num_games)
 
         bot1 = BetterNetBot_v15(bot_name='BetterNet', evaluate=False, use_latest_model=True)
-        bot2 = BetterNetBot_v15(bot_name='BetterNetOpponent', evaluate=False, use_latest_model=False)
+        bot2 = BetterNetBot_v15(bot_name='BetterNetOpponent', evaluate=False, use_latest_model=True)
 
         game = Game()
         game.register_bot(bot1)
