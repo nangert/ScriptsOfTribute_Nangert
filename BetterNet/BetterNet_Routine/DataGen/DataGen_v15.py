@@ -76,32 +76,6 @@ def main() -> None:
             )
             worker.run()
 
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_osfp_opponent()
-            logger.info(f"Primary Model: {primary_model_path}")
-            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
-
-            worker = RolloutWorker_v15(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
-                num_games=int(GAMES_PER_CYCLE / 2),
-                num_threads=THREADS
-            )
-            worker.run()
-
-            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_osfp_opponent()
-            logger.info(f"Primary Model: {primary_model_path}")
-            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
-
-            worker = RolloutWorker_v15(
-                bot1_model_path=primary_model_path,
-                bot2_model_path=opponent_model_path,
-                num_games=int(GAMES_PER_CYCLE / 2),
-                num_threads=THREADS
-            )
-            worker.run()
-
             merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH,
                                  base_filename=BASE_FILENAME)
 
@@ -110,13 +84,6 @@ def main() -> None:
                 merged_summary_dir=MERGED_SUMMARY_DIR,
                 base_filename=SUMMARY_FILE_NAME
             )
-
-
-            benchmark = Benchmark(
-                num_games=64,
-                num_threads=8
-            )
-            benchmark.run()
 
             logger.info(f"Finished {GAMES_PER_CYCLE} games. \n")
 

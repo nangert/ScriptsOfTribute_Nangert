@@ -1,5 +1,7 @@
 ﻿import torch, torch.nn.functional as F, torch.optim as optim, logging
 from pathlib import Path
+import csv
+import time
 
 from BetterNet.BetterNN.BetterNet_v15 import BetterNetV15
 from BetterNet.ReplayBuffer.ReplayBuffer_v15 import ReplayBuffer_v15
@@ -22,6 +24,8 @@ class Trainer_v15:
         self.logger  = logging.getLogger(self.__class__.__name__)
         self.epochs  = epochs
         self.gamma_e, self.gamma_i = gamma_e, gamma_i
+        self.metrics_file = save_path / "training_metrics.csv"
+        self._metric_buf = []
 
         self.model = BetterNetV15(hidden_dim=128).to(device)
         if model_path.exists():
@@ -158,15 +162,40 @@ class Trainer_v15:
                 self.optimizer.step()
                 self.optimizer.zero_grad()
 
+                self._metric_buf.append({
+                    "epoch": epoch,
+                    "total_loss": total_loss.item(),
+                    "policy_loss": pol_loss.item(),
+                    "value_loss": value_loss.item(),
+                    "pred_loss": pred_loss.item(),
+                    "entropy": ent.item(),
+                    "int_reward_mean": int_reward.mean().item(),
+                    "rms_var": self.rms_var,
+                    "timestamp": time.time(),
+                })
+
             self.logger.info(
                 "epoch %d/%d | total %.4f  pol %.4f  V %.4f  pred %.4f  ent %.4f",
                 epoch, self.epochs,
                 total_loss.item(), pol_loss.item(),
                 value_loss.item(), pred_loss.item(), ent.item()
             )
+            self._flush_metrics()
 
         self._save_model()
         self.buffer.archive_buffer()
+
+    # ------------- CSV helper -------------
+    def _flush_metrics(self):
+        if not self._metric_buf:
+            return
+        write_header = not self.metrics_file.exists()
+        with open(self.metrics_file, "a", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=self._metric_buf[0].keys())
+            if write_header:
+                w.writeheader()
+            w.writerows(self._metric_buf)
+        self._metric_buf.clear()
 
     # --------------------------------------------------------------
     def _save_model(self) -> None:

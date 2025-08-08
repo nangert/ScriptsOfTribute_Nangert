@@ -19,11 +19,6 @@ from TributeNet.utils.file_locations import SUMMARY_DIR, MODEL_VERSION, BUFFER_D
 
 
 class BetterNetBot_v13(BaseAI):
-    """
-    Bot that uses a neural network policy to select moves.
-    Includes lstm-Layer.
-    """
-
     def __init__(
         self,
         model_path: Path,
@@ -37,13 +32,16 @@ class BetterNetBot_v13(BaseAI):
         self.model_path = model_path
         self.is_benchmark = is_benchmark
 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.logger.info("Using device: %s", self.device)
+
         model = BetterNetV13(hidden_dim=128, num_moves=10)
         if self.model_path.exists():
             self._load_state(model, self.model_path, self.model_path.name)
         else:
             self.logger.warning("Primary model not found; using random initialization.")
 
-        self.model = model
+        self.model = model.to(self.device)
         self.model.eval()
 
         self.trajectory: List[dict] = []
@@ -70,7 +68,7 @@ class BetterNetBot_v13(BaseAI):
         Returns True if loaded, False otherwise.
         """
         if path.exists():
-            state = torch.load(path, map_location="cpu")
+            state = torch.load(path, map_location=self.device)
             model.load_state_dict(state)
             self.logger.info("Loaded %s model from %s", name, path)
             return True
@@ -86,11 +84,11 @@ class BetterNetBot_v13(BaseAI):
         self.hidden = None
 
         # summary statistics
-        self.summary_stats: dict = {}
+        self.summary_stats = {}
         self.summary_stats["chosen_patrons"] = []
         self.summary_stats["move"] = []
         self.current_turn_move_count = 0
-        self.moves_per_turn: List[int] = []
+        self.moves_per_turn = []
         self.end_turn_first_count = 0
         self.summary_stats["player"] = None
         self.summary_stats["model"] = self.model_path.name if self.model_path else "Random"
@@ -117,47 +115,35 @@ class BetterNetBot_v13(BaseAI):
 
         # 1) Convert state to tensors
         obs = game_state_to_tensor_dict_v5(game_state)
+        obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}
 
-        # each obs[k] is a 1D or 2D tensor for B=1, so add batch‐and‐time dims:
-        obs = {k: v.unsqueeze(0) for k, v in obs.items()}
-        #    → obs["player_stats"]:  [1, player_dim]
-        #       obs["patron_tensor"]: [1, 10, 2]
-        #       obs["tavern_tensor"]: [1, C, card_dim]
+        # 2) Build move_batch = [1, N, D] on device
+        move_tensors = [move_to_tensor_v3(m, game_state).to(self.device) for m in possible_moves]
 
-        # 2) Build move_batch = [1, N, D]
-        move_tensors = [move_to_tensor_v3(m, game_state) for m in possible_moves]
-
-        # Max_moves -> amount of moves always get padded to 10
-        # NN outputs always 10 probabilities
-        # only first n moves are considered (n = len(possible_moves))
         max_moves = 10
-        # MOVE_FEAT_DIM comes from move_to_tensor in utils file
         move_dim = MOVE_FEAT_DIM
 
-        # if amount of possible moves is > 10 then truncate possible moves (end_turn is always last move)
         if len(move_tensors) >= max_moves:
             batch = move_tensors[:max_moves]
         else:
-            # otherwise add padding moves
-            padding = [torch.zeros(move_dim) for _ in range(max_moves - len(move_tensors))]
+            padding = [torch.zeros(move_dim, device=self.device) for _ in range(max_moves - len(move_tensors))]
             batch = move_tensors + padding
-        move_batch = torch.stack(batch, dim=0).unsqueeze(0)  # [1, max_moves, D]
 
-        # 3) Call the model, passing in current hidden state
+        move_batch = torch.stack(batch, dim=0).unsqueeze(0)
+
+        # 3) Call the model
         with torch.no_grad():
             logits, value, new_hidden = self.model(obs, move_batch, self.hidden)
-            #   logits: [1, max_moves], value: [1], new_hidden: LSTM state (h, c)
+            # logits: [1, max_moves], value: [1], new_hidden: LSTM state (h, c) on device
 
-        # 4) Save the new LSTM state for next step
+        # 4) Save new LSTM state (already on correct device)
         self.hidden = new_hidden
 
         # 5) Convert logits → probabilities → pick an index
-        probs = torch.softmax(logits, dim=-1).cpu().numpy().flatten()
-        # probs is always length 10 rn, possible moves probably less so only have first n as options
+        probs = torch.softmax(logits, dim=-1).detach().cpu().numpy().flatten()
         probs = probs[:len(possible_moves)]
         total = probs.sum()
 
-        # fallback if all probabilities in first n probs are 0, then always picks first possible move
         if total > 0:
             probs /= total
             if self.evaluate:
@@ -174,28 +160,25 @@ class BetterNetBot_v13(BaseAI):
 
         self.current_turn_move_count += 1
 
-        # detect "end turn" as first action
         if (chosen_move.command.name == "END_TURN"
                 and self.current_turn_move_count == 1):
             self.end_turn_first_count += 1
 
-        # when turn ends, record and reset
         if chosen_move.command.name == "END_TURN":
             self.moves_per_turn.append(self.current_turn_move_count)
             self.current_turn_move_count = 0
         # --- end tracking ---
 
-        # 6) Save sample in episode / trajectory, discounted reward set at end of episode
+        # 6) Save sample in episode / trajectory (store CPU tensors to keep pickles light)
         self.trajectory.append({
-            "state": {k: v.squeeze(0).cpu() for k, v in obs.items()},
-            "move_tensor": move_batch.squeeze(0).cpu(),
+            "state": {k: v.squeeze(0).detach().cpu() for k, v in obs.items()},
+            "move_tensor": move_batch.squeeze(0).detach().cpu(),
             "action_idx": idx,
             "reward": None,
             "old_log_prob": float(np.log(probs[idx] + 1e-8)),
-            "value_estimate": value.item()
+            "value_estimate": float(value.item())
         })
 
-        # return chosen move to GameRunner
         return chosen_move
 
     def game_end(self, end_game_state: EndGameState, final_state: GameState) -> None:
