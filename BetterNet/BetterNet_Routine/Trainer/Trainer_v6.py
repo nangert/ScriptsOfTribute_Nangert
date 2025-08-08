@@ -4,14 +4,16 @@ from typing import Optional
 
 import torch
 import torch.optim as optim
-import wandb
 
 from BetterNet.BetterNN.BetterNet_v6 import BetterNetV6
 from BetterNet.ReplayBuffer.ReplayBuffer_v6 import ReplayBuffer_v6
+from TributeNet.utils.file_locations import MODEL_PREFIX, EXTENSION
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+MODEL_PREFIX = MODEL_PREFIX
+EXTENSION = EXTENSION
 
 class Trainer_v6:
     """
@@ -23,7 +25,6 @@ class Trainer_v6:
         model_path: Path,
         buffer_path: Path,
         save_path: Path,
-        wandb_run: Optional[wandb.sdk.wandb_run.Run] = None,
         lr: float = 1e-4,
         epochs = 5
     ) -> None:
@@ -33,7 +34,6 @@ class Trainer_v6:
         self.model_path = model_path
         self.buffer_path = buffer_path
         self.save_path = save_path
-        self.wandb_run = wandb_run
         self.epochs = epochs
 
         # Initialize model
@@ -54,10 +54,10 @@ class Trainer_v6:
 
     def train(
             self,
-            batch_size: int = 64,
-            clip_eps: float = 0.3,
-            value_coeff: float = 0.3,
-            entropy_coeff: float = 0.05,
+            batch_size: int = 32,
+            clip_eps: float = 0.2,
+            value_coeff: float = 0.5,
+            entropy_coeff: float = 0.02,
     ):
         obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
             self.buffer.get_all()
@@ -68,7 +68,6 @@ class Trainer_v6:
         lengths_all = lengths_all.to(device)
         mask_all = (torch.arange(T, device=device).unsqueeze(0) < lengths_all.unsqueeze(1)).float()
 
-        step = 0
         for epoch in range(1, self.epochs + 1):
             perm = torch.randperm(B, device=device)
 
@@ -153,17 +152,6 @@ class Trainer_v6:
                 #self.scheduler.step()
                 self.optimizer.zero_grad()
 
-                if self.wandb_run:
-                    self.wandb_run.log({
-                        "policy_loss": pol_loss.item(),
-                        "value_loss": value_loss.item(),
-                        "entropy": ent.item(),
-                        "epoch": epoch,
-                        "step": step,
-                    })
-
-                step += 1
-
             self.logger.info(
                 "Epoch %d/%d complete | total_loss=%.4f | pol_loss=%.4f | val_loss=%.4f | ent=%.4f",
                 epoch, self.epochs, total_loss.item(), pol_loss.item(), value_loss.item(), ent.item()
@@ -178,23 +166,21 @@ class Trainer_v6:
         """
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
         model_dir = self.save_path
-        model_prefix = "better_net_v6_"
-        extension = ".pt"
 
         # Find all existing model files
-        existing_models = list(model_dir.glob(f"{model_prefix}*{extension}"))
+        existing_models = list(model_dir.glob(f"{MODEL_PREFIX}*{EXTENSION}"))
         if existing_models:
             versions = [
-                int(f.stem.replace(model_prefix, ""))
+                int(f.stem.replace(MODEL_PREFIX, ""))
                 for f in existing_models
-                if f.stem.replace(model_prefix, "").isdigit()
+                if f.stem.replace(MODEL_PREFIX, "").isdigit()
             ]
             current_version = max(versions)
         else:
             current_version = 0
 
         next_version = current_version + 1
-        new_save_path = model_dir / f"{model_prefix}{next_version}{extension}"
+        new_save_path = model_dir / f"{MODEL_PREFIX}{next_version}{EXTENSION}"
 
         torch.save(self.model.state_dict(), new_save_path)
         self.logger.info("Model saved to %s", new_save_path)

@@ -52,8 +52,20 @@ class RolloutWorker_v6:
             bot2.bot_name,
             start_game_runner=True,
             runs=self.num_games,
-            threads=1,
-            timeout=20,
+            threads=8,
+            timeout=999,
+        )
+
+        game = Game()
+        game.register_bot(bot2)
+        game.register_bot(bot1)
+        game.run(
+            bot2.bot_name,
+            bot1.bot_name,
+            start_game_runner=True,
+            runs=self.num_games,
+            threads=8,
+            timeout=999,
         )
 
         self.logger.info("Finished %d games", self.num_games)

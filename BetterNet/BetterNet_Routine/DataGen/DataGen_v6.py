@@ -3,19 +3,23 @@ from datetime import datetime
 from pathlib import Path
 
 from BetterNet.BetterNet_Routine.RolloutWorker.RolloutWorkerv_v6 import RolloutWorker_v6
+from BetterNet.utils.merge_game_summaries import merge_game_summaries
 from BetterNet.utils.merge_replay_buffers import merge_replay_buffers
 from BetterNet.utils.model_versioning import get_latest_model_path, get_model_version_path
+from TributeNet.Training.Benchmark import Benchmark
+from TributeNet.utils.file_locations import BUFFER_DIR, SAVED_BUFFER_DIR, MODEL_DIR, MODEL_PREFIX, BUFFER_FILE_NAME, SUMMARY_DIR, MERGED_SUMMARY_DIR, SUMMARY_FILE_NAME
 
 # Directories for saving game trajectories
-GAME_BUFFERS_DIR = Path("game_buffers")
-MERGED_BUFFER_PATH = Path("saved_buffers")
+GAME_BUFFERS_DIR = BUFFER_DIR
+MERGED_BUFFER_PATH = SAVED_BUFFER_DIR
 
 # Directory for loading current model
-MODEL_DIR = Path("saved_models")
-MODEL_PREFIX = "better_net_v6_"
+MODEL_DIR = MODEL_DIR
+MODEL_PREFIX = MODEL_PREFIX
+BASE_FILENAME = BUFFER_FILE_NAME
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 64
+GAMES_PER_CYCLE = 128
 NUM_THREADS = 8
 
 # Directories for logging
@@ -35,8 +39,8 @@ logger = logging.getLogger("DataGeneration")
 
 import random
 
-OSFP_LATEST_PROB = 0.3
-HISTORY_DEPTH = 10  # number of past versions to consider
+OSFP_LATEST_PROB = 0.0
+HISTORY_DEPTH = 5
 
 def select_osfp_opponent() -> Path | None:
     latest = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
@@ -69,7 +73,9 @@ def main() -> None:
     while True:
         try:
             primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-            opponent_model_path = select_osfp_opponent()
+            opponent_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            # opponent_model_path = select_opponent_model()
+
             logger.info(f"Primary Model: {primary_model_path}")
             logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
@@ -81,15 +87,46 @@ def main() -> None:
             )
             worker.run()
 
-            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH, base_filename='BetterNet_v6_buffer')
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            opponent_model_path = select_osfp_opponent()
+            logger.info(f"Primary Model: {primary_model_path}")
+            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
 
-            # Write generation summary log
-            with open(LOG_DIR / "generation_summary.log", "a") as f:
-                f.write(f"{datetime.now()}: Played {GAMES_PER_CYCLE} games. "
-                        f"Primary: {primary_model_path.name}, "
-                        f"Opponent: {opponent_model_path.name if opponent_model_path else 'RandomBot'}\n")
+            worker = RolloutWorker_v6(
+                bot1_model_path=primary_model_path,
+                bot2_model_path=opponent_model_path,
+                num_games=int(GAMES_PER_CYCLE / 2),
+                num_threads=NUM_THREADS
+            )
+            worker.run()
 
-            logger.info(f"Finished {GAMES_PER_CYCLE} games. \n")
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            opponent_model_path = select_osfp_opponent()
+            logger.info(f"Primary Model: {primary_model_path}")
+            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
+
+            worker = RolloutWorker_v6(
+                bot1_model_path=primary_model_path,
+                bot2_model_path=opponent_model_path,
+                num_games=int(GAMES_PER_CYCLE / 2),
+                num_threads=NUM_THREADS
+            )
+            worker.run()
+
+            merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH,
+                                 base_filename=BASE_FILENAME)
+
+            merged_file = merge_game_summaries(
+                summary_dir=SUMMARY_DIR,
+                merged_summary_dir=MERGED_SUMMARY_DIR,
+                base_filename=SUMMARY_FILE_NAME
+            )
+
+            benchmark = Benchmark(
+                num_games=64,
+                num_threads=8
+            )
+            benchmark.run()
 
         except Exception as e:
             logger.exception(f"Error during data generation: {e}")
