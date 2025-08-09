@@ -17,7 +17,7 @@ class RolloutWorker_v13:
         self,
         bot1_model_path: Path,
         bot2_model_path: Optional[Path],
-        num_games: int = 10,
+        num_games: int = 64,
         num_threads: int = 8
     ):
         self.logger = logging.getLogger(self.__class__.__name__)

@@ -26,8 +26,8 @@ class Trainer_v13:
         model_path: Path,
         buffer_path: Path,
         save_path: Path,
-        lr: float = 1e-4,
-        epochs = 5
+        lr: float = 1e-5,
+        epochs = 2
     ) -> None:
         # Logger
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -70,7 +70,6 @@ class Trainer_v13:
         lengths_all = lengths_all.to(device)  # [B]
         mask_all = (torch.arange(T, device=device).unsqueeze(0) < lengths_all.unsqueeze(1)).float()  # [B, T]
 
-        step = 0
         for epoch in range(1, self.epochs + 1):
             perm = torch.randperm(B, device=device)
 
@@ -154,8 +153,6 @@ class Trainer_v13:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
                 self.optimizer.zero_grad()
-
-                step += 1
 
             self.logger.info(
                 "Epoch %d/%d complete | total_loss=%.4f | pol_loss=%.4f | val_loss=%.4f | ent=%.4f",

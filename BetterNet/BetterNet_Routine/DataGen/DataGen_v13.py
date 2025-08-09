@@ -40,7 +40,7 @@ logging.basicConfig(
 logger = logging.getLogger("DataGeneration")
 
 OSFP_LATEST_PROB = 0.0
-HISTORY_DEPTH = 5
+HISTORY_DEPTH = 10
 
 def select_osfp_opponent() -> Path | None:
     latest = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
