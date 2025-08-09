@@ -11,11 +11,54 @@ from BetterNet.BetterNN.EffectsEmbedding import EffectsEmbedding
 from BetterNet.utils.move_to_tensor.move_to_tensor_v2 import MOVE_FEAT_DIM
 
 
-class BetterNetV6(nn.Module):
-    def __init__(self, hidden_dim: int = 128, num_moves: int = 10, num_cards: int = 256) -> None:
+class CrossAttentionScorer(nn.Module):
+    """
+    Produces per-move logits by scoring a single context vector against a set of move embeddings
+    via multi-head scaled dot-product attention (queries from context, keys from moves).
+    Returns raw (pre-softmax) logits of shape [B, N].
+    """
+    def __init__(self, context_dim: int, move_dim: int, attn_dim: int, num_heads: int = 4) -> None:
         super().__init__()
+        assert attn_dim % num_heads == 0, "attn_dim must be divisible by num_heads"
+        self.num_heads = num_heads
+        self.head_dim = attn_dim // num_heads
+        self.scale = 1.0 / math.sqrt(self.head_dim)
 
-        self.hidden_dim = hidden_dim  # expose for helpers
+        self.q_proj = nn.Linear(context_dim, attn_dim)
+        self.k_proj = nn.Linear(move_dim, attn_dim)
+
+    def forward(self, context: torch.Tensor, move_emb: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            context: [B, C] single context vector per batch element (e.g., final LSTM state)
+            move_emb: [B, N, Dm] move embeddings
+
+        Returns:
+            logits: [B, N] raw attention scores (no softmax)
+        """
+        B, N, Dm = move_emb.shape
+
+        # Projections
+        Q = self.q_proj(context)                     # [B, attn_dim]
+        K = self.k_proj(move_emb)                    # [B, N, attn_dim]
+
+        # Reshape into heads
+        Q = Q.view(B, self.num_heads, 1, self.head_dim)           # [B, H, 1, Dh]
+        K = K.view(B, N, self.num_heads, self.head_dim)            # [B, N, H, Dh]
+        K = K.transpose(1, 2)                                      # [B, H, N, Dh]
+
+        # Scaled dot-product scores per head: [B, H, 1, N] -> squeeze to [B, H, N]
+        scores = torch.matmul(Q, K.transpose(-2, -1)).squeeze(-2)  # [B, H, N]
+        scores = scores * self.scale
+
+        # Aggregate heads -> [B, N]
+        logits = scores.mean(dim=1)
+        return logits
+
+
+class BetterNetV6(nn.Module):
+    def __init__(self, hidden_dim: int = 128, num_moves: int = 10, num_cards: int = 256, attn_heads: int = 4) -> None:
+        super().__init__()
 
         # Feature dims
         self.move_feat_dim = MOVE_FEAT_DIM
@@ -71,32 +114,34 @@ class BetterNetV6(nn.Module):
             batch_first=True,
         )
 
-        self.q_proj = nn.Linear(256, hidden_dim, bias=False)   # query: state → D
-        self.k_proj = nn.Linear(hidden_dim, hidden_dim, bias=False)  # key: move → D
-        self.scale = math.sqrt(hidden_dim)
+        self.policy_proj = nn.Linear(256, hidden_dim)
+
+        self.move_cross_attn = CrossAttentionScorer(
+            context_dim=256,        # from LSTM
+            move_dim=hidden_dim,    # move embedding dim
+            attn_dim=hidden_dim,    # split across heads
+            num_heads=attn_heads
+        )
 
         self.value_head = nn.Linear(hidden_dim * 2, 1)
         self.num_moves = num_moves
 
     def forward(self, obs: Dict[str, torch.Tensor], move_tensor: List[List[dict]],
-                hidden: Tuple[torch.Tensor, torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+                hidden: Tuple[torch.Tensor, torch.Tensor] = None) -> Tuple[
+        torch.Tensor, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+
+        D = self.policy_proj.out_features
 
         def embed_mean(field: str, B: int, T: int) -> torch.Tensor:
             ids = obs[f"{field}_ids"].view(B * T, -1)
             feats = obs[f"{field}_feats"].view(B * T, -1, 3)
 
             if ids.size(1) == 0:
-                return torch.zeros(B, T, self.hidden_dim, device=ids.device)
+                return torch.zeros(B, T, D, device=ids.device)
 
             embedded = self.card_embedding(ids, feats).mean(dim=1)  # [B*T, D]
             return embedded.view(B, T, -1)  # [B, T, D]
 
-        def embed_move_batch(move_batch: List[List[dict]], device: torch.device) -> torch.Tensor:
-            all_embs = []
-            for meta_list in move_batch:
-                embs = [self._embed_move_meta(m, device) for m in meta_list]
-                all_embs.append(torch.stack(embs, dim=0).unsqueeze(0))  # [1, N, D]
-            return torch.cat(all_embs, dim=0)  # [B, N, D]
 
         current_shape = obs["current_player"].shape
         if len(current_shape) == 2:  # Inference: [1, 11]
@@ -131,19 +176,17 @@ class BetterNetV6(nn.Module):
             value = self.value_head(lstm_out).squeeze(-1).squeeze(-1)
 
             final_hidden = lstm_out[:, -1, :]
-            query = self.q_proj(final_hidden).unsqueeze(1)
 
             move_emb = torch.stack([
                 self._embed_move_meta(m, obs["current_player"].device).squeeze(0)
                 for m in move_tensor
-            ], dim=0).unsqueeze(0)  # [B,N,D]
-            key = self.k_proj(move_emb)                           # [B,N,D]
+            ], dim=0).unsqueeze(0)  # [B,N,D]                    # [B,N,D]
 
-            logits = torch.bmm(query, key.transpose(1, 2)).squeeze(1)  # [B,N]
-            logits = logits / self.scale
+            logits = self.move_cross_attn(final_hidden, move_emb)  # [1, N]
+
             return logits, value, new_hidden
 
-        elif len(current_shape) == 3:  # [B,T,11]
+        elif len(current_shape) == 3:
             cur_encoded = self.cur_player_encoder(obs["current_player"])
             opp_encoded = self.enemy_player_encoder(obs["enemy_player"])
             patron_encoded = self.patron_encoder(obs["patron_tensor"].flatten(start_dim=-2))
@@ -153,7 +196,8 @@ class BetterNetV6(nn.Module):
                 obs["tavern_available_ids"].view(B * T, N),
                 obs["tavern_available_feats"].view(B * T, N, -1)
             )
-            tav_avail_attn = self.tavern_available_attention(tav_avail).view(B, T, -1)
+            tav_avail_attn = self.tavern_available_attention(tav_avail)
+            tav_avail_attn = tav_avail_attn.view(B, T, -1)
 
             hand_enc = embed_mean("hand", B, T)
             draw_enc = embed_mean("played", B, T)
@@ -171,10 +215,10 @@ class BetterNetV6(nn.Module):
                 played_enc,
                 opp_cooldown_enc,
                 opp_draw_enc
-            ], dim=-1))  # [B,T,4D]
+            ], dim=-1))  # [B,T,D]
 
-            lstm_out, _ = self.lstm(context)  # [B,T,256]
-            values = self.value_head(lstm_out).squeeze(-1)  # [B,T]
+            lstm_out, _ = self.lstm(context)
+            values = self.value_head(lstm_out).squeeze(-1)
             return lstm_out, values, _
 
         else:
@@ -195,4 +239,4 @@ class BetterNetV6(nn.Module):
             return self.effects_embedding(meta["effect_vec"].to(device).unsqueeze(0))  # [1,D]
 
         # Fallback: zero vector
-        return torch.zeros((1, self.hidden_dim), device=device)
+        return torch.zeros((1, self.policy_proj.out_features), device=device)

@@ -1,15 +1,4 @@
-﻿"""Trainer_v6 adapted for the new cross‑attention pointer head.
-
-Only three things changed vs. the old implementation:
-1.  `policy_proj` -> `q_proj` / `k_proj` pair.
-2.  Logits use scaled dot‑product `(q·k^T)/√D`.
-3.  Removed the extra `.unsqueeze(2)`/`squeeze(2)` gymnastics because the
-    shapes now align naturally.
-
-Everything else – PPO math, masking, value head – is untouched.
-"""
-
-import logging
+﻿import logging
 from pathlib import Path
 from typing import Optional
 
@@ -26,17 +15,18 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_PREFIX = MODEL_PREFIX
 EXTENSION = EXTENSION
 
-
 class Trainer_v6:
-    """Handles model loading, training over replay buffer, and saving."""
+    """
+    Handles model loading, training over replay buffer, and saving.
+    """
 
     def __init__(
         self,
         model_path: Path,
         buffer_path: Path,
         save_path: Path,
-        lr: float = 1e-4,
-        epochs: int = 5,
+        lr: float = 1e-5,
+        epochs = 2
     ) -> None:
         # Logger
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -46,7 +36,7 @@ class Trainer_v6:
         self.save_path = save_path
         self.epochs = epochs
 
-        # Initialise model
+        # Initialize model
         self.model = BetterNetV6(hidden_dim=128, num_moves=10, num_cards=125).to(device)
         if self.model_path.exists():
             state = torch.load(self.model_path, map_location=device)
@@ -55,42 +45,37 @@ class Trainer_v6:
         else:
             self.logger.info("No existing model found; initializing new model.")
 
-        # Optimiser
+        # Optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        # self.scheduler = CosineAnnealingLR(self.optimizer, T_max=self.epochs * 2)
 
         # Replay buffer
         self.buffer = ReplayBuffer_v6(self.buffer_path)
 
-    # ─────────────────────────────────────────────────────────
     def train(
-        self,
-        batch_size: int = 32,
-        clip_eps: float = 0.2,
-        value_coeff: float = 0.5,
-        entropy_coeff: float = 0.02,
+            self,
+            batch_size: int = 32,
+            clip_eps: float = 0.2,
+            value_coeff: float = 0.5,
+            entropy_coeff: float = 0.02,
     ):
-        obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = (
+        obs_all, actions_all, returns_all, moves_all, old_lp_all, old_val_all, lengths_all = \
             self.buffer.get_all()
-        )
         B, T = actions_all.shape
-        self.logger.info(
-            "Training on %d episodes, each padded to length %d, %d PPO epochs",
-            B,
-            T,
-            self.epochs,
-        )
+        self.logger.info("Training on %d episodes, each padded to length %d, %d PPO epochs", B, T, self.epochs)
 
         device = next(self.model.parameters()).device
         lengths_all = lengths_all.to(device)
         mask_all = (torch.arange(T, device=device).unsqueeze(0) < lengths_all.unsqueeze(1)).float()
 
+        self.model.train()
+
         for epoch in range(1, self.epochs + 1):
             perm = torch.randperm(B, device=device)
 
             for start in range(0, B, batch_size):
-                batch_inds = perm[start : start + batch_size]
+                batch_inds = perm[start: start + batch_size]
 
-                # ---- gather batch ----
                 obs_batch = {k: v.to(device)[batch_inds] for k, v in obs_all.items()}
                 actions_batch = actions_all.to(device)[batch_inds]
                 returns_batch = returns_all.to(device)[batch_inds]
@@ -101,50 +86,40 @@ class Trainer_v6:
 
                 Bp = actions_batch.size(0)
 
-                # ---- forward pass ----
-                lstm_out, values, _ = self.model(obs_batch, None)
+                # Forward pass to get sequence features and values
+                lstm_out, values, _ = self.model(obs_batch, None)  # lstm_out: [B', T, 256], values: [B', T]
 
-                # Query projection (state)
-                query_all = self.model.q_proj(lstm_out)  # [B', T, D]
-
-                # ---- embed legal moves ----
+                # ---- Build move embeddings per (batch, time) step and pad to 10 moves ----
                 move_meta_batch = [moves_all[i] for i in batch_inds.tolist()]
                 move_emb_nested = []
                 for episode in move_meta_batch:
                     step_embs_list = []
                     for step_meta in episode:
-                        step_embs = [
-                            self.model._embed_move_meta(m, device).squeeze(0) for m in step_meta
-                        ]
-                        step_tensor = torch.stack(step_embs)
-                        step_tensor = torch.nn.functional.pad(
-                            step_tensor, (0, 0, 0, 10 - step_tensor.size(0))
-                        )
-                        step_embs_list.append(step_tensor)
-                    move_emb_nested.append(torch.stack(step_embs_list))
+                        step_embs = [self.model._embed_move_meta(m, device).squeeze(0) for m in step_meta]  # list of [D]
+                        if len(step_embs) > 0:
+                            step_tensor = torch.stack(step_embs)  # [N, D]
+                        else:
+                            # handle rare empty-move edge case with a single zero row (will be padded to 10 anyway)
+                            step_tensor = torch.zeros((1, self.model.policy_proj.out_features), device=device)
+                        # pad to fixed 10
+                        step_tensor = torch.nn.functional.pad(step_tensor, (0, 0, 0, 10 - step_tensor.size(0)))
+                        step_embs_list.append(step_tensor)  # [10, D]
+                    move_emb_nested.append(torch.stack(step_embs_list))  # [T, 10, D]
 
                 max_T = T
-                move_emb_padded = torch.stack(
-                    [
-                        torch.nn.functional.pad(m, (0, 0, 0, 0, 0, max_T - m.size(0)))
-                        for m in move_emb_nested
-                    ]
-                ).to(device)  # [B', T, 10, D]
+                move_emb_padded = torch.stack([
+                    torch.nn.functional.pad(m, (0, 0, 0, 0, 0, max_T - m.size(0))) for m in move_emb_nested
+                ]).to(device)  # [B', T, 10, D]
 
-                # Key projection (move)
-                key_all = self.model.k_proj(move_emb_padded)  # [B', T, 10, D]
-
-                # ---- scaled dot‑product logits ----
+                # ---- Cross-attention logits (replace old bmm) ----
                 Bt = Bp * T
-                Q_flat = query_all.contiguous().view(Bt, 1, -1)  # [B*T, 1, D]
-                K_flat = key_all.contiguous().view(Bt, 10, -1)  # [B*T, 10, D]
+                context_flat = lstm_out.contiguous().view(Bt, lstm_out.size(-1))          # [B'*T, 256]
+                moves_flat = move_emb_padded.view(Bt, 10, -1)                              # [B'*T, 10, D]
+                logits_flat = self.model.move_cross_attn(context_flat, moves_flat)         # [B'*T, 10]
+                logits_all = logits_flat.view(Bp, T, 10)                                   # [B', T, 10]
 
-                logits_flat = torch.bmm(Q_flat, K_flat.transpose(1, 2)).squeeze(1)
-                logits_flat = logits_flat / self.model.scale  # √D scaling
-                logits_all = logits_flat.view(Bp, T, 10)
-
-                # ---- masked log‑prob ----
-                mask_flat = mask_batch.view(-1)
+                # Masked log_prob computation
+                mask_flat = mask_batch.view(-1)  # [B'*T]
                 acts_flat = actions_batch.view(-1)
                 valid_mask = mask_flat == 1
                 logits_valid = logits_all.view(-1, 10)[valid_mask]
@@ -156,7 +131,6 @@ class Trainer_v6:
                 logp_flat = torch.zeros_like(acts_flat, dtype=torch.float)
                 logp_flat[valid_mask] = logp_valid
 
-                # ---- PPO losses ----
                 oldlp_flat = oldlp_batch.view(-1)
                 ret_flat = returns_batch.view(-1)
                 val_flat = values.view(-1)
@@ -184,27 +158,25 @@ class Trainer_v6:
                 total_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
+                # self.scheduler.step()
                 self.optimizer.zero_grad()
 
             self.logger.info(
                 "Epoch %d/%d complete | total_loss=%.4f | pol_loss=%.4f | val_loss=%.4f | ent=%.4f",
-                epoch,
-                self.epochs,
-                total_loss.item(),
-                pol_loss.item(),
-                value_loss.item(),
-                ent.item(),
+                epoch, self.epochs, total_loss.item(), pol_loss.item(), value_loss.item(), ent.item()
             )
 
         self._save_model()
         self.buffer.archive_buffer()
 
-    # ─────────────────────────────────────────────────────────
     def _save_model(self) -> None:
-        """Saves the model with an auto‑incrementing version suffix."""
+        """
+        Saves the model with a new version number to avoid overwriting.
+        """
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
         model_dir = self.save_path
 
+        # Find all existing model files
         existing_models = list(model_dir.glob(f"{MODEL_PREFIX}*{EXTENSION}"))
         if existing_models:
             versions = [
