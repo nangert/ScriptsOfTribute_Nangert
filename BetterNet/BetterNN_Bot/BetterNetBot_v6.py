@@ -14,6 +14,7 @@ from scripts_of_tribute.board import EndGameState
 
 from BetterNet.BetterNN.BetterNet_v6 import BetterNetV6
 from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v3 import game_state_to_tensor_dict_v3
+from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v5 import game_state_to_tensor_dict_v5
 from BetterNet.utils.move_to_tensor.move_to_metadata import move_to_metadata
 
 from TributeNet.utils.file_locations import SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR, BENCHMARK_DIR
@@ -119,7 +120,7 @@ class BetterNetBot_v6(BaseAI):
 
 
         # 1) Convert state to tensors
-        obs = game_state_to_tensor_dict_v3(game_state)
+        obs = game_state_to_tensor_dict_v5(game_state)
 
         # each obs[k] is a 1D or 2D tensor for B=1, so add batch‐and‐time dims:
         obs = {k: v.unsqueeze(0).to(self.device) for k, v in obs.items()}

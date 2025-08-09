@@ -26,7 +26,7 @@ MERGED_BUFFER_DIR = SAVED_BUFFER_DIR
 GAMES_PER_CYCLE = 32
 EPOCHS_PER_CYCLE = 2
 BATCH_SIZE = 32
-LEARNING_RATE = 3e-5
+LEARNING_RATE = 1e-5
 SLEEP_IF_NO_DATA = 30
 
 def get_lowest_buffer_file(buffer_dir: Path, base_filename=BASE_FILENAME):
@@ -54,7 +54,6 @@ def main():
         buffer_file = get_lowest_buffer_file(MERGED_BUFFER_DIR)
 
         if buffer_file is None:
-            logger.warning("No buffer file found. Sleeping...")
             time.sleep(SLEEP_IF_NO_DATA)
             continue
 

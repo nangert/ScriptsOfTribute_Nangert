@@ -29,13 +29,14 @@ class ReplayBuffer_v6:
         obs_keys = [
             "current_player", "enemy_player", "patron_tensor",
             "tavern_available_ids", "tavern_available_feats",
-            #"tavern_cards_ids", "tavern_cards_feats",
+            # "tavern_cards_ids", "tavern_cards_feats",
             "hand_ids", "hand_feats",
-            "draw_pile_ids", "draw_pile_feats",
+            "known_ids", "known_feats",
+            "agents_ids", "agents_feats",
+            "opp_agents_ids", "opp_agents_feats",
             "played_ids", "played_feats",
-            "opp_cooldown_ids", "opp_cooldown_feats",
-            "opp_draw_pile_ids", "opp_draw_pile_feats"
         ]
+
         obs_unpadded: Dict[str, List[torch.Tensor]] = {k: [] for k in obs_keys}
         move_meta_unpadded: List[List[List[dict]]] = []
         actions_unpadded: List[torch.Tensor] = []

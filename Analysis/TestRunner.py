@@ -22,39 +22,40 @@ def main():
 
     #bot2 = TributeBotV1(bot_name="TributeNet_1", evaluate=True, model_path=bot1_path)
     #bot1 = BetterNetBot_v13(model_path=bot1_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
-    bot1 = BetterNetBot_v13(model_path=bot2_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
-    bot2 = CompetitionBot_v1(model_path=bot2_path, bot_name="Comp", evaluate=True, instant_moves=True)
+    #bot2 = BetterNetBot_v13(model_path=bot2_path, bot_name="BetterNet_1", evaluate=True, save_trajectory=False)
+    bot1 = CompetitionBot_v1(model_path=bot1_path, bot_name="Comp_1", evaluate=True, instant_moves=True, remove_end_turn=True)
+    #bot2 = CompetitionBot_v1(model_path=bot1_path, bot_name="Comp_2", evaluate=True, instant_moves=True, remove_end_turn=False)
     #bot2 = CompetitionBot_v1(model_path=bot2_path, bot_name="BetterNet_2", evaluate=True)
     #bot1 = BetterNetBot_v14(bot14_path, bot_name="BetterNet_2", evaluate=True, save_trajectory=False)
     #bot2 = RandomBot(bot_name="RandomBot")
-    #bot2 = BaselineBot(bot_name="Baseline")
+    bot2 = BaselineBot(bot_name="Baseline")
 
     game = Game()
-    #game.register_bot(bot1)
+    game.register_bot(bot1)
     game.register_bot(bot2)
     game.run(
-        "SOISMCTS",
+        #"SOISMCTS",
         #"Sakkirin",
         #"BestMCTS3",
-        #bot1.bot_name,
+        bot1.bot_name,
         bot2.bot_name,
         start_game_runner=True,
-        runs=128,
+        runs=256,
         threads=8,
         timeout=9999
     )
 
     game = Game()
     game.register_bot(bot2)
-    #game.register_bot(bot1)
+    game.register_bot(bot1)
     game.run(
         bot2.bot_name,
-        #bot1.bot_name,
-        # "Sakkirin",
-        "SOISMCTS",
+        bot1.bot_name,
+        #"Sakkirin",
+        #"SOISMCTS",
         #"BestMCTS3",
         start_game_runner=True,
-        runs=128,
+        runs=256,
         threads=8,
         timeout=9999
     )
