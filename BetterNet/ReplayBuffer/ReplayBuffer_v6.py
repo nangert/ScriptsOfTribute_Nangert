@@ -7,11 +7,13 @@ import torch
 from typing import List, Dict
 import shutil
 
+from TributeNet.utils.file_locations import USED_BUFFER_DIR
+
 class ReplayBuffer_v6:
     """
     Loads and prepares training data.
     """
-    def __init__(self, buffer_path: Path, archive_dir: Path = Path("used_buffers")):
+    def __init__(self, buffer_path: Path, archive_dir: Path = USED_BUFFER_DIR):
         self.buffer_path = buffer_path
         self.archive_dir = archive_dir
         self.data = self._load()
