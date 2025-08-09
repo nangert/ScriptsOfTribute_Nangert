@@ -19,7 +19,7 @@ MODEL_PREFIX = MODEL_PREFIX
 BASE_FILENAME = BUFFER_FILE_NAME
 
 # Games generated per GameRunner instance
-GAMES_PER_CYCLE = 16
+GAMES_PER_CYCLE = 128
 NUM_THREADS = 8
 
 # Directories for logging
@@ -87,8 +87,47 @@ def main() -> None:
             )
             worker.run()
 
+
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            opponent_model_path = select_osfp_opponent()
+            logger.info(f"Primary Model: {primary_model_path}")
+            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
+
+            worker = RolloutWorker_v6(
+                bot1_model_path=primary_model_path,
+                bot2_model_path=opponent_model_path,
+                num_games=int(GAMES_PER_CYCLE / 2),
+                num_threads=NUM_THREADS
+            )
+            worker.run()
+
+            primary_model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
+            opponent_model_path = select_osfp_opponent()
+            logger.info(f"Primary Model: {primary_model_path}")
+            logger.info(f"Opponent Model: {opponent_model_path or 'RandomBot'}")
+
+            worker = RolloutWorker_v6(
+                bot1_model_path=primary_model_path,
+                bot2_model_path=opponent_model_path,
+                num_games=int(GAMES_PER_CYCLE / 2),
+                num_threads=NUM_THREADS
+            )
+            worker.run()
+
             merge_replay_buffers(buffer_dir=GAME_BUFFERS_DIR, merged_buffer_dir=MERGED_BUFFER_PATH,
                                  base_filename=BASE_FILENAME)
+
+            merged_file = merge_game_summaries(
+                summary_dir=SUMMARY_DIR,
+                merged_summary_dir=MERGED_SUMMARY_DIR,
+                base_filename=SUMMARY_FILE_NAME
+            )
+
+            benchmark = Benchmark(
+                num_games=64,
+                num_threads=8
+            )
+            benchmark.run()
 
 
         except Exception as e:

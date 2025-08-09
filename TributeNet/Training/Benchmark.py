@@ -6,6 +6,7 @@ from BetterNet.BetterNN_Bot.BetterNetBot_v12 import BetterNetBot_v12
 from BetterNet.BetterNN_Bot.BetterNetBot_v13 import BetterNetBot_v13
 from BetterNet.BetterNN_Bot.BetterNetBot_v14 import BetterNetBot_v14
 from BetterNet.BetterNN_Bot.BetterNetBot_v15 import BetterNetBot_v15
+from BetterNet.BetterNN_Bot.BetterNetBot_v6 import BetterNetBot_v6
 from BetterNet.utils.model_versioning import get_latest_model_path
 from RandomBot.BaselineBot import BaselineBot
 from RandomBot.RandomBot import RandomBot
@@ -26,7 +27,7 @@ class Benchmark:
 
     def run(self) -> None:
         model_path = get_latest_model_path(MODEL_DIR, MODEL_PREFIX)
-        bot1 = BetterNetBot_v15(bot_name='BetterNetBot_1', evaluate=True, model_path=model_path, is_benchmark=True)
+        bot1 = BetterNetBot_v6(bot_name='BetterNetBot_1', evaluate=True, model_path=model_path, is_benchmark=True)
         bot2 = BaselineBot(bot_name='Baseline')
 
         game = Game()
