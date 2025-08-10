@@ -17,7 +17,7 @@ from BetterNet.utils.game_state_to_tensor.game_state_to_vector_v5 import game_st
 from BetterNet.utils.move_to_tensor.move_to_metadata import move_to_metadata
 from BetterNet.utils.move_to_tensor.move_to_tensor_v3 import move_to_tensor_v3, MOVE_FEAT_DIM
 
-from TributeNet.utils.file_locations import SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR, BENCHMARK_DIR
+from TributeNet.utils.file_locations import SUMMARY_DIR, MODEL_VERSION, BUFFER_DIR, BENCHMARK_DIR, AVAILABLE_PATRONS
 
 
 class BetterNetBot_v17(BaseAI):
@@ -100,7 +100,13 @@ class BetterNetBot_v17(BaseAI):
         self.summary_stats["model"] = self.model_path.name if self.model_path else "Random"
 
     def select_patron(self, available_patrons: List[PatronId]) -> PatronId:
-        patron = random.choice(available_patrons)
+        if not available_patrons:
+            raise ValueError("No patrons available to choose from.")
+
+        preferred_pool = [p for p in available_patrons if p in AVAILABLE_PATRONS]
+        pool = preferred_pool if preferred_pool else available_patrons
+
+        patron = random.choice(pool)
         self.summary_stats["chosen_patrons"].append(patron.value)
         return patron
 
