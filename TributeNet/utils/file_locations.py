@@ -27,6 +27,15 @@ BUFFER_DIR = Path("data/replay_buffers")
 SAVED_BUFFER_DIR = Path("data/replay_buffers_saved")
 USED_BUFFER_DIR = Path("data/replay_buffers_used")
 
+AVAILABLE_PATRONS = [
+    PatronId.PELIN,
+    PatronId.DUKE_OF_CROWS,
+    PatronId.ANSEI,
+    PatronId.RAJHIN,
+    PatronId.ORGNUM,
+    PatronId.SAINT_ALESSIA
+]
+
 PREFERRED_ORDER = [
     PatronId(5),
     PatronId(9),
