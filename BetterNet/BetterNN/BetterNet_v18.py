@@ -66,7 +66,7 @@ class BetterNetV18(nn.Module):
             ResidualMLP(hidden_dim * 5, hidden_dim * 5),
         )
         self.lstm = nn.LSTM(
-            input_size=hidden_dim * 4,
+            input_size=hidden_dim * 5,
             hidden_size=hidden_dim * 2,
             batch_first=True,
         )
