@@ -95,10 +95,10 @@ def game_state_to_tensor_dict_v7(gs: GameState) -> dict[str, torch.Tensor | Tupl
     cur = gs.current_player
     opp = gs.enemy_player
 
-    draw_pile_ids, draw_pile_feats = cards_to_tensor_pair(gs.current_player.draw_pile)
-    hand_ids, hand_feats = cards_to_tensor_pair(gs.current_player.hand)
-    played_ids, played_feats = cards_to_tensor_pair(gs.current_player.played)
-    cooldown_ids, cooldown_feats = cards_to_tensor_pair(gs.current_player.cooldown_pile)
+    draw_pile_ids, draw_pile_feats = cards_to_tensor_pair(cur.draw_pile)
+    hand_ids, hand_feats = cards_to_tensor_pair(cur.hand)
+    played_ids, played_feats = cards_to_tensor_pair(cur.played)
+    cooldown_ids, cooldown_feats = cards_to_tensor_pair(cur.cooldown_pile)
 
     deck_ids = torch.cat([draw_pile_ids, hand_ids, played_ids, cooldown_ids])
     deck_feats = torch.cat([draw_pile_feats, hand_feats, played_feats, cooldown_feats])

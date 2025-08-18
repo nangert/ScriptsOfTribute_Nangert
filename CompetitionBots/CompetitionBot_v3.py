@@ -19,6 +19,9 @@ from state_encoder.move_to_tensor_v3 import move_to_tensor_v3, MOVE_FEAT_DIM
 from utils.InstantPlayCards import INSTANT_PLAY_IDS, get_cardId_from_uniqueId
 
 PREFERRED_ORDER = [
+    PatronId.ORGNUM,
+    PatronId.SAINT_ALESSIA,
+    PatronId.ANSEI
 ]
 
 class CompetitionBotV3(BaseAI):
@@ -26,14 +29,12 @@ class CompetitionBotV3(BaseAI):
         self,
         bot_name: str = "NAgent",
         evaluate: bool = True,
-        patron_choice: bool = True,
         instant_moves: bool = True,
         remove_end_turn: bool = True,
     ):
         super().__init__(bot_name=bot_name)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model_path = Path('model/v17/tribute_net_v29.pt')
-        self.patron_choice = patron_choice
         self.instant_moves = instant_moves
         self.remove_end_turn = remove_end_turn
 
@@ -66,10 +67,9 @@ class CompetitionBotV3(BaseAI):
         pass
 
     def select_patron(self, available_patrons: List[PatronId]) -> PatronId:
-        if self.patron_choice:
-            for pref in PREFERRED_ORDER:
-                if pref in available_patrons:
-                    return pref
+        for pref in PREFERRED_ORDER:
+            if pref in available_patrons:
+                return pref
 
         return random.choice(available_patrons)
 
