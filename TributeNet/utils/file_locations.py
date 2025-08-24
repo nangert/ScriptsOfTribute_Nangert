@@ -24,6 +24,7 @@ USED_BENCHMARK_DIR = Path("data/summaries/used_benchmarks")
 
 BUFFER_FILE_NAME = 'BetterNet_buffer'
 BUFFER_DIR = Path("data/replay_buffers")
+DRAFFT_BUFFER_DIR = Path("data/draft_replay_buffers")
 SAVED_BUFFER_DIR = Path("data/replay_buffers_saved")
 USED_BUFFER_DIR = Path("data/replay_buffers_used")
 
