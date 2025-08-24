@@ -41,7 +41,7 @@ class TributeBotV2(BaseAI):
         self.model_path = model_path
         self.use_latest_model = use_latest_model
 
-        self.model = TributeNetV2(hidden_dim=128).to(self.device)
+        self.model = TributeNetV2().to(self.device)
 
         self.trajectory: List[dict] = []
         self.hidden = None

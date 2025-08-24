@@ -19,7 +19,7 @@ class TributeNetV2(nn.Module):
     def __init__(
             self,
             hidden_dim: int = 128,
-            num_cards: int = 256,
+            num_cards: int = 128,
             attn_heads: int = 4
     ):
         super().__init__()

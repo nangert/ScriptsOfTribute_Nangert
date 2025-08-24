@@ -14,21 +14,21 @@ def main():
     parser.add_argument(
         "--num-files",
         type=int,
-        default=64,
+        default=768,
         help="Number of games each worker should consume per batch."
     )
 
     parser.add_argument(
         "--sleep",
         type=int,
-        default=60,
+        default=5,
         help="Number of games each worker should consume per batch."
     )
 
     parser.add_argument(
         "--lr",
         type=float,
-        default=1e-5,
+        default=3e-5,
         help="Learning rate."
     )
 
