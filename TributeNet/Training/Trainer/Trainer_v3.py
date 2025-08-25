@@ -1,5 +1,4 @@
-﻿# TributeNet/Training/Trainer/Trainer_V3.py
-import logging
+﻿import logging
 from pathlib import Path
 from typing import List, Optional
 
@@ -17,14 +16,15 @@ from TributeNet.utils.model_versioning import get_model_version_path
 class Trainer_V3:
     def __init__(
         self,
-        raw_data,                          # your usual episode trajectories
-        lr: float = 1e-5,
+        raw_data,
+        lr: float = 1e-4,               # slightly higher for faster convergence
         epochs: int = 2,
-        draft_dir: Optional[Path] = None,  # where .draft.pkl files live; default BUFFER_DIR
-        draft_bs: int = 128,               # minibatch for draft head
+        draft_dir: Optional[Path] = None,
+        draft_bs: int = 128,
         draft_clip_eps: float = 0.2,
-        draft_coeff: float = 1.0,          # weight for draft policy loss
-        draft_entropy_coeff: float = 0.01, # entropy bonus on draft head
+        draft_coeff: float = 3.0,        # up-weight draft head (fewer steps than moves)
+        draft_value_coeff: float = 0.5,  # value loss weight for draft baseline
+        draft_entropy_coeff: float = 0.02,
     ) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -34,6 +34,7 @@ class Trainer_V3:
         self.draft_bs = draft_bs
         self.draft_clip_eps = draft_clip_eps
         self.draft_coeff = draft_coeff
+        self.draft_value_coeff = draft_value_coeff
         self.draft_entropy_coeff = draft_entropy_coeff
 
         self.model = TributeNetV3().to(self.device)
@@ -51,25 +52,18 @@ class Trainer_V3:
         # regular episode buffer (unchanged)
         self.batch_data = ReplayBuffer_V3(raw_data)
 
-        # draft buffer (new). You can replace this with a constructor that
-        # takes pre-collected draft events if you already bundle them.
+        # draft buffer from the dir you save in the bot
         ddir = draft_dir or DRAFFT_BUFFER_DIR
         self.draft_buffer = DraftReplayBuffer_V1.from_dir(ddir)
 
-    def _build_move_mask_and_meta(
-        self, move_meta_all: List, batch_inds, T: int, device
-    ):
-        """
-        Returns:
-          meta_padded: [B', T, 10, D]
-          move_mask:   [B', T, 10] (True = real)
-        """
-        move_meta_batch = [move_meta_all[i] for i in batch_inds.tolist()]  # [B'] of [T_i][N_i]{}
+    # ------------- helpers for move policy batching -------------
+    def _build_move_mask_and_meta(self, move_meta_all: List, batch_inds, T: int, device):
+        move_meta_batch = [move_meta_all[i] for i in batch_inds.tolist()]
         meta_nested, mask_nested = [], []
         for episode in move_meta_batch:
             step_embs_list, step_mask_list = [], []
             for step_meta in episode:
-                n = max(1, min(10, len(step_meta)))  # at least one slot to stay well-defined
+                n = max(1, min(10, len(step_meta)))
                 if n > 0:
                     embs = [self.model._embed_move_meta(m, device).squeeze(0) for m in step_meta[:n]]
                     step_tensor = torch.stack(embs)  # [n, D]
@@ -85,25 +79,20 @@ class Trainer_V3:
             meta_nested.append(torch.stack(step_embs_list))  # [T_i, 10, D]
             mask_nested.append(torch.stack(step_mask_list))  # [T_i, 10]
 
-        max_T = T
         meta_padded = torch.stack([
-            F.pad(m, (0, 0, 0, 0, 0, max_T - m.size(0))) if m.size(0) < max_T else m
+            F.pad(m, (0, 0, 0, 0, 0, T - m.size(0))) if m.size(0) < T else m
             for m in meta_nested
         ]).to(device)  # [B', T, 10, D]
+
         move_mask = torch.stack([
-            F.pad(m, (0, 0, 0, max_T - m.size(0))) if m.size(0) < max_T else m
+            F.pad(m, (0, 0, 0, T - m.size(0))) if m.size(0) < T else m
             for m in mask_nested
         ]).to(device)  # [B', T, 10]
+
         return meta_padded, move_mask
 
-    def _build_move_feats(
-        self, move_tensor_all: List, batch_inds, T: int, device
-    ):
-        """
-        Returns:
-          feat_emb_padded: [B', T, 10, D]
-        """
-        move_tensor_batch = [move_tensor_all[i] for i in batch_inds.tolist()]  # [B'] of [T_i][N_i]{tensor}
+    def _build_move_feats(self, move_tensor_all: List, batch_inds, T: int, device):
+        move_tensor_batch = [move_tensor_all[i] for i in batch_inds.tolist()]
         feat_nested = []
         D_feat = self.model.move_feat_dim
         for episode in move_tensor_batch:
@@ -111,36 +100,28 @@ class Trainer_V3:
             for step_moves in episode:
                 n = max(1, min(10, len(step_moves)))
                 if n > 0:
-                    step_tensor = torch.stack([t.to(device) for t in step_moves[:n]], dim=0)  # [n, D_feat]
+                    step_tensor = torch.stack([t.to(device) for t in step_moves[:n]], dim=0)
                 else:
                     step_tensor = torch.zeros((1, D_feat), device=device)
                 if n < 10:
                     step_tensor = F.pad(step_tensor, (0, 0, 0, 10 - n))
-                step_feats_list.append(step_tensor)  # [10, D_feat]
-            feat_nested.append(torch.stack(step_feats_list))  # [T_i, 10, D_feat]
+                step_feats_list.append(step_tensor)
+            feat_nested.append(torch.stack(step_feats_list))
 
         feat_padded = torch.stack([
             F.pad(m, (0, 0, 0, 0, 0, T - m.size(0))) if m.size(0) < T else m
             for m in feat_nested
         ]).to(device)  # [B', T, 10, D_feat]
+
         feat_emb_padded = self.model.move_encoder(feat_padded)  # [B', T, 10, D]
         return feat_emb_padded
 
+    # ------------- helpers for draft head -------------
     def _draft_minibatch_to_tensors(self, batch: List[DraftEvent], device):
-        """
-        Pads variable-length candidate lists to max_M and masks with -1e9.
-        Returns:
-          logits_pad_targets: None (we compute logits inside train step)
-          acts:   [B]
-          oldlp:  [B]
-          rets:   [B]
-          avail_ids_list, sel_ids_list, picks_me, total_picks: python lists for on-the-fly forward
-        """
         acts = torch.tensor([ev.action_index for ev in batch], dtype=torch.long, device=device)
         oldlp = torch.tensor([ev.old_log_prob for ev in batch], dtype=torch.float32, device=device)
         rets = torch.tensor([ev.reward for ev in batch], dtype=torch.float32, device=device)
 
-        # Return lists; we’ll run the head per sample then pad the logits.
         avail_ids_list = [torch.tensor(ev.available_ids, dtype=torch.long, device=device) for ev in batch]
         sel_ids_list = [
             (torch.tensor(ev.selected_so_far, dtype=torch.long, device=device) if len(ev.selected_so_far) > 0 else None)
@@ -148,39 +129,41 @@ class Trainer_V3:
         ]
         picks_me = [int(ev.picks_by_me) for ev in batch]
         total_picks = [int(ev.total_picks) for ev in batch]
-
         return acts, oldlp, rets, avail_ids_list, sel_ids_list, picks_me, total_picks
 
-    def _draft_forward_logits_pad(self, avail_ids_list, sel_ids_list, picks_me, total_picks, device):
-        """
-        Runs model.patron_pick_logits per sample, pads to max M with -1e9.
-        Returns logits_pad [B, Mmax] and mask [B, Mmax] (True = real).
-        """
-        logits_list, masks = [], []
+    def _draft_forward_logits_value_pad(self, avail_ids_list, sel_ids_list, picks_me, total_picks, device):
+        logits_list, masks, v_list = [], [], []
         maxM = 1
         for avail in avail_ids_list:
             maxM = max(maxM, int(avail.numel()) if avail is not None else 1)
 
         for i, avail in enumerate(avail_ids_list):
             if avail is None or avail.numel() == 0:
-                # degenerate (shouldn't happen): one dummy slot
                 logits = torch.zeros(1, device=device)
                 mask = torch.tensor([True], device=device)
+                v_ctx = torch.zeros((), device=device)
             else:
-                logits = self.model.patron_pick_logits(
+                logits, v_ctx = self.model.patron_pick_forward(
                     avail, sel_ids_list[i], picks_me[i], total_picks[i]
-                )  # [Mi]
+                )
                 mask = torch.ones_like(logits, dtype=torch.bool)
+
+            v_list.append(v_ctx)
+
             if logits.numel() < maxM:
                 pad = torch.full((maxM - logits.numel(),), -1e9, device=device)
                 logits = torch.cat([logits, pad], dim=0)
                 mask = torch.cat([mask, torch.zeros(maxM - mask.numel(), dtype=torch.bool, device=device)], dim=0)
-            logits_list.append(logits.unsqueeze(0))  # [1, Mmax]
+
+            logits_list.append(logits.unsqueeze(0))
             masks.append(mask.unsqueeze(0))
+
         logits_pad = torch.cat(logits_list, dim=0)  # [B, Mmax]
         mask = torch.cat(masks, dim=0)              # [B, Mmax]
-        return logits_pad, mask
+        v_ctx = torch.stack(v_list, dim=0)          # [B]
+        return logits_pad, mask, v_ctx
 
+    # ------------- training -------------
     def train(
         self,
         batch_size: int = 32,
@@ -221,23 +204,19 @@ class Trainer_V3:
                 actions_batch = actions_all.to(device)[batch_inds]
                 returns_batch = returns_all.to(device)[batch_inds]
                 oldlp_batch = old_lp_all.to(device)[batch_inds]
-                # oldval_batch = old_val_all.to(device)[batch_inds]  # not used directly
                 lengths_batch = lengths_all[batch_inds]
                 mask_batch = mask_all[batch_inds]
                 Bp = actions_batch.size(0)
 
-                # ----- model forward (sequence values only) -----
+                # ---- forward sequence (values only) ----
                 lstm_out, values = self.model(obs_batch)  # [B', T, 256], [B', T]
 
-                # ----- build META + move mask -----
+                # ---- build META + FEATURE + score ----
                 meta_padded, move_mask = self._build_move_mask_and_meta(move_meta_all, batch_inds, T, device)
-
-                # ----- build FEATURE embeddings -----
                 feat_emb_padded = self._build_move_feats(move_tensor_all, batch_inds, T, device)
 
-                # ----- fuse + score -----
                 Bt = Bp * T
-                context_flat = lstm_out.contiguous().view(Bt, lstm_out.size(-1))  # [B'*T, 256]
+                context_flat = lstm_out.contiguous().view(Bt, lstm_out.size(-1))
                 meta_flat = meta_padded.view(Bt, 10, -1)
                 feat_flat = feat_emb_padded.view(Bt, 10, -1)
 
@@ -245,12 +224,10 @@ class Trainer_V3:
                 logits_flat = self.model.move_cross_attn(context_flat, fused_flat)   # [Bt, 10]
                 logits_all = logits_flat.view(Bp, T, 10)
 
-                # sanitize + mask padded moves (keep Categorical stable)
-                logits_all = torch.nan_to_num(logits_all)                            # PyTorch >=1.8
-                logits_all = logits_all.masked_fill(~move_mask, -1e9)
-
-                # ----- PPO losses (masked over valid timesteps) -----
-                mask_flat = mask_batch.view(-1)  # [B'*T]
+                # mask & sanitize logits (keep Categorical finite and valid)
+                logits_all = torch.nan_to_num(logits_all)                    # requires torch >= 1.8
+                logits_all = logits_all.masked_fill(~move_mask, -1e9)       # masked actions: -inf-ish
+                mask_flat = mask_batch.view(-1)
                 acts_flat = actions_batch.view(-1)
 
                 valid_mask = mask_flat == 1
@@ -286,15 +263,15 @@ class Trainer_V3:
 
                 total_loss = pol_loss + value_coeff * value_loss - entropy_coeff * ent
 
-                # ===== Draft head PPO (optional if we have events) =====
+                # ===== Draft head PPO + value =====
                 if len(self.draft_buffer) > 0 and self.draft_coeff != 0.0:
                     for draft_batch in self.draft_buffer.to_minibatches(self.draft_bs):
                         acts, oldlp, rets, avail_ids_list, sel_ids_list, picks_me, total_picks = \
                             self._draft_minibatch_to_tensors(draft_batch, device)
 
-                        logits_pad, cand_mask = self._draft_forward_logits_pad(
+                        logits_pad, cand_mask, v_ctx = self._draft_forward_logits_value_pad(
                             avail_ids_list, sel_ids_list, picks_me, total_picks, device
-                        )  # [B, Mmax], [B, Mmax]
+                        )  # [B, Mmax], [B, Mmax], [B]
 
                         logits_pad = torch.nan_to_num(logits_pad)
                         logits_pad = logits_pad.masked_fill(~cand_mask, -1e9)
@@ -302,15 +279,27 @@ class Trainer_V3:
                         dist = torch.distributions.Categorical(logits=logits_pad)
                         logp = dist.log_prob(acts)
 
-                        adv = rets - rets.mean()   # simple baseline; plug a value head if desired
+                        # advantage = R - V(s)  (actor-critic baseline for draft)
+                        adv = (rets - v_ctx.detach())
+                        adv_mean = adv.mean()
+                        adv_std  = adv.std(unbiased=False) + 1e-8
+                        adv = (adv - adv_mean) / adv_std
+
                         ratio = torch.exp(logp - oldlp)
                         clipped = torch.clamp(ratio, 1 - self.draft_clip_eps, 1 + self.draft_clip_eps)
                         draft_pol_loss = -torch.min(ratio * adv, clipped * adv).mean()
+
+                        # value regression for draft baseline
+                        draft_v_loss = F.mse_loss(v_ctx, rets)
+
                         draft_ent = dist.entropy().mean()
 
-                        total_loss = total_loss + self.draft_coeff * (draft_pol_loss - self.draft_entropy_coeff * draft_ent)
+                        total_loss = total_loss + self.draft_coeff * (
+                            draft_pol_loss + self.draft_value_coeff * draft_v_loss
+                            - self.draft_entropy_coeff * draft_ent
+                        )
 
-                # ----- optimize -----
+                # ---- optimize ----
                 total_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
@@ -326,14 +315,22 @@ class Trainer_V3:
     def _save_model(self) -> None:
         MODEL_DIR.parent.mkdir(parents=True, exist_ok=True)
 
-        existing_models = list(MODEL_DIR.glob(f"{MODEL_PREFIX}*{EXTENSION}"))
+        existing_models = list(MODEL_DIR.glob(f'{MODEL_PREFIX}*{EXTENSION}'))
         if existing_models:
             versions = [
-                int(f.stem.replace(MODEL_PREFIX, ""))
+                int(f.stem.replace(MODEL_PREFIX, ""))  # typo safeguard ignored; corrected below
                 for f in existing_models
                 if f.stem.replace(MODEL_PREFIX, "").isdigit()
             ]
-            current_version = max(versions)
+            # fix typo handling
+            versions = []
+            for f in existing_models:
+                stem = f.stem
+                if stem.startswith(MODEL_PREFIX):
+                    num = stem[len(MODEL_PREFIX):]
+                    if num.isdigit():
+                        versions.append(int(num))
+            current_version = max(versions) if versions else 0
         else:
             current_version = 0
 

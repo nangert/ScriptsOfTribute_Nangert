@@ -18,12 +18,13 @@ class TributeNetV3(nn.Module):
         self,
         hidden_dim: int = 128,
         num_cards: int = 128,
-        attn_heads: int = 4,  # kept for API parity; unused here
+        attn_heads: int = 4,  # param kept for api parity
     ):
         super().__init__()
 
         self.move_feat_dim = MOVE_FEAT_DIM
 
+        # ---- encoders for state ----
         self.move_encoder = nn.Sequential(
             nn.Linear(MOVE_FEAT_DIM, hidden_dim),
             nn.ReLU(),
@@ -42,16 +43,16 @@ class TributeNetV3(nn.Module):
             ResidualMLP(hidden_dim, hidden_dim),
         )
 
-        # Patron tokenization: shared ID embedding + small state embedding.
+        # ---- patrons: shared ID + small relative-state emb; Deep-Sets pooling ----
         self.patron_state_emb = nn.Embedding(NUM_PATRON_STATES, hidden_dim)
         self.patron_embedding = PatronEmbedding(num_patrons=NUM_PATRONS, embed_dim=hidden_dim)
-        self.patron_proj = ResidualMLP(hidden_dim, hidden_dim)  # post-pool polish
+        self.patron_proj = ResidualMLP(hidden_dim, hidden_dim)  # post-pool
 
-        self.pick_pos_emb = nn.Embedding(5, hidden_dim)
-        # your own picks so far: 0..2 (you pick twice)
-        self.my_pick_count_emb = nn.Embedding(3, hidden_dim)
+        # ---- draft head (patron picking) with ACTOR-CRITIC baseline ----
+        self.pick_pos_emb = nn.Embedding(5, hidden_dim)   # 0..4 total picks observed
+        self.my_pick_count_emb = nn.Embedding(3, hidden_dim)  # 0..2 you pick twice
 
-        # MLP that scores each candidate given a global context
+        # per-candidate scorer (uses global ctx)
         self.patron_pick_head = nn.Sequential(
             nn.Linear(hidden_dim * 4, hidden_dim),
             nn.ReLU(),
@@ -59,9 +60,19 @@ class TributeNetV3(nn.Module):
             nn.Linear(hidden_dim, 1)
         )
 
+        # value baseline for draft (reduces variance)
+        self.patron_pick_ctx_proj = ResidualMLP(hidden_dim, hidden_dim)
+        self.patron_pick_value = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+        # ---- cards / effects ----
         self.card_embedding = CardEmbedding(num_cards=num_cards, embed_dim=hidden_dim, scalar_feat_dim=3)
         self.effects_embedding = EffectsEmbedding(embed_dim=hidden_dim)
 
+        # ---- tavern attention (unchanged) ----
         self.tavern_available_attention = TavernSelfAttention(hidden_dim, hidden_dim)
 
         # cur, opp, patrons, tavern, hand, played, known, my_agents, opp_agents = 9 fields
@@ -77,7 +88,7 @@ class TributeNetV3(nn.Module):
             batch_first=True
         )
 
-        # move fusion & scoring
+        # ---- move fusion & cross-attn policy ----
         self.move_gate = nn.Sequential(
             nn.Linear(hidden_dim * 2, hidden_dim),
             nn.ReLU(),
@@ -103,6 +114,7 @@ class TributeNetV3(nn.Module):
         with torch.no_grad():
             self.move_gate[-1].bias.fill_(-2.0)
 
+    # ===================== forward =====================
     def forward(
         self,
         obs: Dict[str, torch.Tensor],
@@ -122,7 +134,7 @@ class TributeNetV3(nn.Module):
 
         current_shape = obs["player_tensor"].shape
 
-        # ---- training path: encode sequence to values ----
+        # ---- training path: sequence values only ----
         if len(current_shape) == 3:
             B, T, _ = obs["player_tensor"].shape
             cur_encoded = self.player_encoder(obs["player_tensor"])
@@ -156,7 +168,7 @@ class TributeNetV3(nn.Module):
 
             lstm_out, _ = self.lstm(context)
             values = self.value_head(lstm_out).squeeze(-1)
-            return lstm_out, values  # no policy head on training path
+            return lstm_out, values  # no move policy head here
 
         # ---- acting path: score candidate moves with cross-attn ----
         elif move_metas is not None and move_tensor is not None and len(current_shape) == 2:
@@ -212,6 +224,7 @@ class TributeNetV3(nn.Module):
                 f"- move_tensor is {'set' if move_tensor is not None else 'None'}"
             )
 
+    # ===================== helpers =====================
     def _fuse_move_embeddings(self, meta_emb: torch.Tensor, feat_emb: torch.Tensor) -> torch.Tensor:
         x_cat = torch.cat([meta_emb, feat_emb], dim=-1)
         gate = torch.sigmoid(self.move_gate(x_cat))
@@ -243,7 +256,6 @@ class TributeNetV3(nn.Module):
 
     # ---- NEW patron encoder: Deep Sets (masked mean) ----
     def _encode_patrons_tokens(self, obs, B, T):
-        # inputs: obs["patron_ids"], ["patron_states"], ["patron_present"]
         ids = obs["patron_ids"].view(B, T, -1).long()
         states = obs["patron_states"].view(B, T, -1).long()
         present = obs["patron_present"].view(B, T, -1).float()
@@ -257,42 +269,48 @@ class TributeNetV3(nn.Module):
         pooled = (tokens * m).sum(dim=1) / m.sum(dim=1).clamp_min(1.0)
         return self.patron_proj(pooled).view(B, T, -1)
 
+    # ============== Draft (patron pick) forward ==============
     @torch.no_grad()
-    def patron_pick_logits(
-            self,
-            available_ids: torch.Tensor,  # [M]  patron ids to choose from
-            selected_ids: Optional[torch.Tensor] = None,  # [K]  already picked (both sides)
-            picks_by_me: int = 0,  # 0..2
-            total_picks: int = 0  # 0..4
-    ) -> torch.Tensor:
+    def patron_pick_forward(
+        self,
+        available_ids: torch.Tensor,                 # [M]
+        selected_ids: Optional[torch.Tensor] = None, # [K] or None
+        picks_by_me: int = 0,                        # 0..2
+        total_picks: int = 0                         # 0..4
+    ):
         """
-        Returns unnormalized logits over available candidates [M].
-        Uses shared patron_embedding; NO game_state required.
+        Returns (logits[M], value_baseline_scalar) for PPO on draft head.
         """
         device = available_ids.device
-        H = self.policy_proj.out_features
+        cand = self.patron_embedding(available_ids.unsqueeze(0)).squeeze(0)  # [M,H]
+        avail_mean = cand.mean(dim=0, keepdim=True)                           # [1,H]
 
-        # Candidate embeddings: [M, H]
-        cand = self.patron_embedding(available_ids.unsqueeze(0)).squeeze(0)
-
-        # Mean embedding of what is still available (helps relative scoring)
-        avail_mean = cand.mean(dim=0, keepdim=True)  # [1, H]
-
-        # Mean embedding of what’s already selected (empty -> zeros)
         if selected_ids is not None and selected_ids.numel() > 0:
             sel = self.patron_embedding(selected_ids.unsqueeze(0)).squeeze(0)
             sel_mean = sel.mean(dim=0, keepdim=True)
         else:
             sel_mean = torch.zeros_like(avail_mean)
 
-        pos = self.pick_pos_emb(torch.tensor([min(total_picks, 4)], device=device))  # [1,H]
-        mine = self.my_pick_count_emb(torch.tensor([min(picks_by_me, 2)], device=device))  # [1,H]
+        pos  = self.pick_pos_emb(torch.tensor([min(total_picks, 4)], device=device))      # [1,H]
+        mine = self.my_pick_count_emb(torch.tensor([min(picks_by_me, 2)], device=device)) # [1,H]
 
-        # Global draft context
+        # global draft context (state-value baseline derives from here)
         ctx = (avail_mean + sel_mean + pos + mine).squeeze(0)  # [H]
+        ctx_feat = self.patron_pick_ctx_proj(ctx)              # [H]
+        v_ctx = self.patron_pick_value(ctx_feat).squeeze(-1)   # scalar
 
-        # Per-candidate features: [M, 4H]
-        feats = torch.cat([cand, ctx.expand_as(cand), cand * ctx, torch.abs(cand - ctx)], dim=-1)
-
+        feats = torch.cat([cand, ctx.expand_as(cand), cand * ctx, torch.abs(cand - ctx)], dim=-1)  # [M,4H]
         logits = self.patron_pick_head(feats).squeeze(-1)  # [M]
+        return logits, v_ctx
+
+    # thin wrapper to preserve your existing call sites
+    @torch.no_grad()
+    def patron_pick_logits(
+        self,
+        available_ids: torch.Tensor,
+        selected_ids: Optional[torch.Tensor] = None,
+        picks_by_me: int = 0,
+        total_picks: int = 0
+    ) -> torch.Tensor:
+        logits, _ = self.patron_pick_forward(available_ids, selected_ids, picks_by_me, total_picks)
         return logits

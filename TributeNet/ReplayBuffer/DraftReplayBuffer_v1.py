@@ -17,7 +17,8 @@ class DraftEvent:
 
 class DraftReplayBuffer_V1:
     """
-    Loads patron-draft events saved by the bot (each file holds a list[dict]).
+    Loads patron-draft events saved by the bot (each file holds list[dict]).
+    We keep this separate from your turn replay buffer for simplicity.
     """
     def __init__(self, events: List[DraftEvent]) -> None:
         self.events = events
@@ -26,9 +27,8 @@ class DraftReplayBuffer_V1:
     def _load_one(path: Path) -> List[DraftEvent]:
         with open(path, "rb") as f:
             raw = pickle.load(f)
-        out = []
+        out: List[DraftEvent] = []
         for ev in raw:
-            # tolerate missing keys in early runs
             out.append(DraftEvent(
                 available_ids=list(ev.get("available_ids", [])),
                 selected_so_far=list(ev.get("selected_so_far", [])),
